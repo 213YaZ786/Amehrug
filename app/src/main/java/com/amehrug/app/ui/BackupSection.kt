@@ -52,6 +52,10 @@ fun BackupSection(rowContent: @Composable (String, String?, Boolean, () -> Unit)
     var working by remember { mutableStateOf(false) }
     var ask by remember { mutableStateOf<Ask?>(null) }
 
+    // A local function is only visible after its declaration, so this one
+    // stays above every caller. Moving it down broke the build.
+    fun toast(message: String) = Toast.makeText(context, message, Toast.LENGTH_LONG).show()
+
     val exportPicker = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument("application/octet-stream"),
     ) { uri -> if (uri != null) ask = Ask.Export(uri) }
@@ -85,8 +89,6 @@ fun BackupSection(rowContent: @Composable (String, String?, Boolean, () -> Unit)
             }
         }
     }
-
-    fun toast(message: String) = Toast.makeText(context, message, Toast.LENGTH_LONG).show()
 
     rowContent(
         stringResource(R.string.backup_export),
