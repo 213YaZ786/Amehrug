@@ -31,6 +31,7 @@ import com.amehrug.app.crypto.BackupCrypto
 import com.amehrug.app.diagnostics.Diagnostics
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 private sealed interface Ask {
@@ -80,6 +81,11 @@ fun BackupSection(rowContent: @Composable (String, String?, Boolean, () -> Unit)
                             report.files,
                         ),
                     )
+                } catch (cancel: CancellationException) {
+                    // Leaving the screen cancels the coroutine, and
+                    // CancellationException is an Exception. Caught below it would
+                    // be reported as a failure and would break the cancellation.
+                    throw cancel
                 } catch (e: Exception) {
                     Diagnostics.log.error("import", "reading a Notally backup", e)
                     toast(context.getString(R.string.notally_failed))
@@ -142,6 +148,11 @@ fun BackupSection(rowContent: @Composable (String, String?, Boolean, () -> Unit)
                         System.currentTimeMillis(),
                     )
                     toast(context.getString(R.string.backup_done, report.notes, report.files))
+                } catch (cancel: CancellationException) {
+                    // Leaving the screen cancels the coroutine, and
+                    // CancellationException is an Exception. Caught below it would
+                    // be reported as a failure and would break the cancellation.
+                    throw cancel
                 } catch (e: Exception) {
                     Diagnostics.log.error("backup", "writing the backup", e)
                     toast(context.getString(R.string.backup_failed))
@@ -162,6 +173,11 @@ fun BackupSection(rowContent: @Composable (String, String?, Boolean, () -> Unit)
                 try {
                     val report = AppGraph.backup.restoreFrom(current.source, password.toCharArray())
                     toast(context.getString(R.string.restore_done, report.notes, report.files))
+                } catch (cancel: CancellationException) {
+                    // Leaving the screen cancels the coroutine, and
+                    // CancellationException is an Exception. Caught below it would
+                    // be reported as a failure and would break the cancellation.
+                    throw cancel
                 } catch (e: Exception) {
                     // A wrong password and a damaged file look the same, on purpose.
                     Diagnostics.log.error("backup", "reading the backup", e)

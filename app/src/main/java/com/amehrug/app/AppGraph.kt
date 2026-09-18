@@ -10,6 +10,7 @@ import com.amehrug.app.data.SettingsRepository
 import com.amehrug.app.data.db.AmehrugDatabase
 import com.amehrug.app.diagnostics.Diagnostics
 import com.amehrug.app.security.AppLock
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -40,6 +41,28 @@ object AppGraph {
 
     /** Locked until the settings say otherwise. */
     val lock: AppLock = AppLock()
+
+    /**
+     * Work that must reach the disk before the app goes to the background.
+     * The open editor puts its note here. Written from the main thread and
+     * read from it as well, but volatile costs nothing and removes the doubt.
+     */
+    @Volatile
+    private var pendingWrite: (suspend () -> Unit)? = null
+
+    /** Called by the editor when it opens, with null when it closes. */
+    fun onPendingWrite(block: (suspend () -> Unit)?) {
+        pendingWrite = block
+    }
+
+    /**
+     * Runs that work on the process scope. Called from onStop, which is the
+     * last moment the system guarantees before it is free to kill the app.
+     */
+    fun flushPendingWrite() {
+        val block = pendingWrite ?: return
+        appScope.launch { block() }
+    }
 
     fun init(application: Application) {
         app = application
@@ -74,6 +97,11 @@ object AppGraph {
                 attachments.clearCache()
                 val orphans = attachments.deleteOrphans(notes.allAttachmentFiles())
                 if (orphans > 0) log.info("media", "$orphans orphan files removed")
+            } catch (cancel: CancellationException) {
+                // Leaving the screen cancels the coroutine, and
+                // CancellationException is an Exception. Caught below it would
+                // be reported as a failure and would break the cancellation.
+                throw cancel
             } catch (e: Exception) {
                 log.error("database", "startup check", e)
             }

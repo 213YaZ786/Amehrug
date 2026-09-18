@@ -4,6 +4,7 @@ import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import com.amehrug.app.crypto.AttachmentStore
 import com.amehrug.app.diagnostics.Diagnostics
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -40,6 +41,11 @@ object ImageLoader {
                 val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
                 if (bitmap != null) synchronized(cache) { cache[key] = bitmap }
                 bitmap
+            } catch (cancel: CancellationException) {
+                // Leaving the screen cancels the coroutine, and
+                // CancellationException is an Exception. Caught below it would
+                // be reported as a failure and would break the cancellation.
+                throw cancel
             } catch (e: Exception) {
                 // A picture that cannot be read must not take the note down.
                 Diagnostics.log.error("media", "reading a picture", e)

@@ -63,6 +63,7 @@ import com.amehrug.app.ui.SettingsScreen
 import com.amehrug.app.ui.notes.NoteEditorScreen
 import com.amehrug.app.ui.notes.NotesListScreen
 import com.amehrug.app.ui.theme.AmehrugTheme
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -95,6 +96,8 @@ class MainActivity : ComponentActivity() {
 
     override fun onStop() {
         super.onStop()
+        // Before anything else: whatever is being typed reaches the disk.
+        AppGraph.flushPendingWrite()
         AppGraph.lock.onBackground()
     }
 }
@@ -116,6 +119,11 @@ private fun AmehrugApp() {
                 AppGraph.lock.onSettings(settings)
                 value = SettingsState.Ready(settings)
             }
+        } catch (cancel: CancellationException) {
+            // Leaving the screen cancels the coroutine, and
+            // CancellationException is an Exception. Caught below it would
+            // be reported as a failure and would break the cancellation.
+            throw cancel
         } catch (e: Exception) {
             Diagnostics.log.error("settings", "reading settings", e)
             value = SettingsState.Failed
@@ -176,7 +184,9 @@ private fun AmehrugRoot(settings: AppSettings) {
         AppGraph.notes.observeLabels().collect { value = it }
     }
 
-    BackHandler(enabled = screenName != NOTES) { screenName = NOTES }
+    // The editor handles its own back, because it has to write the note
+    // first. Everything else just goes home.
+    BackHandler(enabled = screenName != NOTES && screenName != EDITOR) { screenName = NOTES }
 
     // One number the diagnostic log can be read for, when a bar looks like
     // it is sitting under the status bar. Zero here means the window is not

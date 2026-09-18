@@ -1,6 +1,7 @@
 package com.amehrug.app.ui.notes
 
 import android.widget.Toast
+import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
@@ -33,6 +34,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +42,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.snapshots.SnapshotStateList
 import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
@@ -62,12 +65,22 @@ import com.amehrug.app.model.NoteColor
 import com.amehrug.app.model.NoteType
 import com.amehrug.app.ui.media.ImageLoader
 import com.amehrug.app.ui.theme.noteContainerColor
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
- * One note, open. Typing changes state only. The note is written when the
- * screen leaves, once, which is what makes the back gesture feel instant and
- * keeps the database quiet while someone types.
+ * One note, open.
+ *
+ * Nothing typed here is ever only in memory for long. The note is written
+ * a second after the last keystroke, again the moment the app goes to the
+ * background, and again when the screen is left, by the arrow or by the back
+ * gesture. Losing a note because the system reclaimed the app is the thing
+ * this screen exists to prevent.
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -87,6 +100,10 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
     // The identifier the note ends up with. A picture cannot be attached to
     // a note that does not exist yet, so adding one saves it first.
     var savedId by remember(noteId) { mutableStateOf(noteId) }
+    // What is already on disk, identifier stripped, so an autosave that would
+    // rewrite the same thing is skipped.
+    var lastWritten by remember(noteId) { mutableStateOf<Note?>(null) }
+    val saveLock = remember(noteId) { Mutex() }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
 
@@ -105,6 +122,7 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
                 attachments.clear()
                 attachments.addAll(note.attachments)
                 savedId = note.id
+                lastWritten = note.copy(id = 0L)
             }
             loaded = true
         }
@@ -119,6 +137,10 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
             color = color,
             title = title,
             body = body,
+            // Carried through untouched. The editor cannot style text yet,
+            // roadmap task 11, and a note imported from Notally arrives with
+            // spans. Leaving this out wrote them away on the first save.
+            spans = original.spans,
             items = items.toList(),
             labels = original.labels,
             attachments = attachments.toList(),
@@ -130,16 +152,56 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
         ),
     )
 
+    // Every write goes through this one function, under a lock. Without the
+    // lock, two writes that overlap while the note still has no identifier
+    // would each insert a row, and one note would become two.
+    suspend fun store(note: Note) {
+        saveLock.withLock {
+            val target = if (savedId != 0L) note.copy(id = savedId) else note
+            val id = repository.save(target)
+            if (id > 0) {
+                savedId = id
+                lastWritten = target.copy(id = 0L)
+            }
+        }
+    }
+
     fun save() {
         val note = current.value
         // appScope, not the screen's scope: the write must finish even though
         // the screen is already gone.
-        AppGraph.appScope.launch { repository.save(note) }
+        AppGraph.appScope.launch { store(note) }
     }
 
     fun leave() {
         save()
         onClose()
+    }
+
+    // The back gesture used to be handled one level up, where it changed the
+    // screen without writing anything. That is how a note was lost.
+    BackHandler { leave() }
+
+    // A pause of about a second after the last change is enough. It keeps the
+    // database quiet while someone types and still means a sudden kill costs
+    // a second of text rather than the whole note.
+    LaunchedEffect(noteId, loaded) {
+        if (!loaded) return@LaunchedEffect
+        snapshotFlow { current.value }
+            .distinctUntilChanged()
+            .collectLatest { note ->
+                if (note.copy(id = 0L) == lastWritten) return@collectLatest
+                delay(AUTOSAVE_DELAY_MS)
+                store(note)
+            }
+    }
+
+    // Leaving the app is the case that has to work. onStop calls this back,
+    // on a scope that outlives the screen, so the note is on disk before the
+    // system is free to kill the process.
+    DisposableEffect(noteId) {
+        AppGraph.onPendingWrite { store(current.value) }
+        onDispose { AppGraph.onPendingWrite(null) }
     }
 
     val picker = rememberLauncherForActivityResult(
@@ -167,6 +229,11 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
                     )
                     val rowId = repository.addAttachment(savedId, attachment, attachments.size)
                     attachments.add(attachment.copy(id = rowId))
+                } catch (cancel: CancellationException) {
+                    // Leaving the screen cancels the coroutine, and
+                    // CancellationException is an Exception. Caught below it would
+                    // be reported as a failure and would break the cancellation.
+                    throw cancel
                 } catch (e: Exception) {
                     Diagnostics.log.error("media", "adding a picture", e)
                     Toast.makeText(context, R.string.attachment_failed, Toast.LENGTH_SHORT).show()
@@ -236,8 +303,8 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
                         onClick = {
                             val note = current.value
                             AppGraph.appScope.launch {
-                                val id = repository.save(note)
-                                if (id > 0) repository.archive(listOf(id))
+                                store(note)
+                                if (savedId > 0) repository.archive(listOf(savedId))
                             }
                             onClose()
                         },
@@ -251,8 +318,8 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
                         onClick = {
                             val note = current.value
                             AppGraph.appScope.launch {
-                                val id = repository.save(note)
-                                if (id > 0) repository.moveToTrash(listOf(id))
+                                store(note)
+                                if (savedId > 0) repository.moveToTrash(listOf(savedId))
                             }
                             onClose()
                         },
@@ -420,3 +487,6 @@ private fun ColorRow(selected: NoteColor, onSelect: (NoteColor) -> Unit) {
         }
     }
 }
+
+/** How long typing has to stop before the note is written. */
+private const val AUTOSAVE_DELAY_MS = 1_000L

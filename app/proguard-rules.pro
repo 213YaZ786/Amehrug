@@ -13,3 +13,8 @@
 -dontwarn java.awt.**
 -dontwarn org.bouncycastle.jce.provider.**
 -dontwarn org.bouncycastle.jcajce.provider.**
+
+# A stack trace in the diagnostic log is unreadable once R8 has renamed the
+# exception class: a real log line read "b70" and said nothing. Keeping the
+# names costs nothing, they are already in the release mapping.
+-keepnames class * extends java.lang.Throwable
