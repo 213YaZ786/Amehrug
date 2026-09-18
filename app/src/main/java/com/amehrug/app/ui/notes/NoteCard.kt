@@ -1,9 +1,13 @@
 package com.amehrug.app.ui.notes
 
+import androidx.compose.animation.core.animateDpAsState
+import androidx.compose.foundation.border
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,8 +17,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.text.font.FontFamily
@@ -22,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.amehrug.app.R
+import com.amehrug.app.model.AttachmentKind
 import com.amehrug.app.model.Note
 import com.amehrug.app.model.NoteType
 import com.amehrug.app.ui.theme.noteContainerColor
@@ -31,10 +38,30 @@ private const val PREVIEW_LINES = 8
 private const val PREVIEW_ITEMS = 6
 
 @Composable
-fun NoteCard(note: Note, onClick: () -> Unit, modifier: Modifier = Modifier) {
+fun NoteCard(
+    note: Note,
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    // detectTapGestures rather than combinedClickable, which is still an
+    // experimental foundation API.
+    val border by animateDpAsState(
+        targetValue = if (selected) 3.dp else 0.dp,
+        label = "selection border",
+    )
     Card(
-        onClick = onClick,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier
+            .fillMaxWidth()
+            .border(
+                width = border,
+                color = MaterialTheme.colorScheme.primary,
+                shape = RoundedCornerShape(16.dp),
+            )
+            .pointerInput(note.id) {
+                detectTapGestures(onTap = { onClick() }, onLongPress = { onLongClick() })
+            },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
             containerColor = noteContainerColor(note.color),
@@ -42,6 +69,14 @@ fun NoteCard(note: Note, onClick: () -> Unit, modifier: Modifier = Modifier) {
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
     ) {
+        val picture = note.attachments.firstOrNull { it.kind == AttachmentKind.IMAGE }
+        if (picture != null) {
+            AttachmentImage(
+                name = picture.fileName,
+                targetPx = 480,
+                modifier = Modifier.fillMaxWidth().height(132.dp),
+            )
+        }
         Column(
             modifier = Modifier.padding(14.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),

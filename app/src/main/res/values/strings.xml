@@ -93,4 +93,26 @@
         <item quantity="one">%d more line</item>
         <item quantity="other">%d more lines</item>
     </plurals>
+    <string name="action_clear_selection">Clear the selection</string>
+    <string name="action_labels">Labels</string>
+    <string name="action_restore">Put back</string>
+    <string name="action_unarchive">Out of the archive</string>
+    <string name="action_delete_forever">Delete for good</string>
+    <string name="action_close">Close</string>
+    <string name="color_none">No colour</string>
+    <string name="label_new">New label</string>
+    <string name="label_add">Add this label</string>
+    <string name="drawer_labels">Labels</string>
+    <string name="delete_forever_message">These notes and their files go for good. Nothing brings them back.</string>
+    <string name="notally_import">Import from Notally</string>
+    <string name="notally_import_summary">Reads a backup zip made by Notally. Your notes are added, nothing here is touched.</string>
+    <string name="notally_done">Imported: %1$d notes, %2$d files.</string>
+    <string name="notally_failed">Nothing was imported. This file does not look like a Notally backup.</string>
+    <string name="attachment_add">Add a picture</string>
+    <string name="attachment_image">Picture</string>
+    <string name="attachment_audio">Recording, %1$d min %2$d s</string>
+    <string name="attachment_file">File</string>
+    <string name="attachment_remove">Remove</string>
+    <string name="attachment_no_player">Playing recordings comes later. The file is kept, encrypted.</string>
+    <string name="attachment_failed">That picture could not be added.</string>
 </resources>

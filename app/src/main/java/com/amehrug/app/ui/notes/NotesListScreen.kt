@@ -35,8 +35,11 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.SolidColor
@@ -51,6 +54,7 @@ import com.amehrug.app.R
 import com.amehrug.app.model.Folder
 import com.amehrug.app.model.Note
 import com.amehrug.app.model.NoteType
+import kotlinx.coroutines.launch
 
 /**
  * The wall of notes: a staggered grid of cards, pinned ones first, a search
@@ -63,6 +67,7 @@ import com.amehrug.app.model.NoteType
 @Composable
 fun NotesListScreen(
     folder: Folder,
+    label: String?,
     query: String,
     onQueryChange: (String) -> Unit,
     columns: Int,
@@ -72,14 +77,41 @@ fun NotesListScreen(
     onCreate: (NoteType) -> Unit,
 ) {
     val repository = AppGraph.notes
-    val notes by produceState(initialValue = emptyList<Note>(), key1 = folder, key2 = query) {
-        val flow = if (query.isBlank()) {
-            repository.observeFolder(folder)
-        } else {
-            repository.search(query)
+    val notes by produceState(
+        initialValue = emptyList<Note>(),
+        key1 = folder,
+        key2 = query,
+        key3 = label,
+    ) {
+        val flow = when {
+            query.isNotBlank() -> repository.search(query)
+            label != null -> repository.observeLabel(label)
+            else -> repository.observeFolder(folder)
         }
         flow.collect { value = it }
     }
+    val allLabels by produceState(initialValue = emptyList<String>()) {
+        repository.observeLabels().collect { value = it }
+    }
+    val scope = rememberCoroutineScope()
+
+    // Selection lives here: leaving the screen drops it, which is what
+    // someone expects after opening a note.
+    var selected by remember { mutableStateOf(emptySet<Long>()) }
+    var asking by remember { mutableStateOf(Ask.NONE) }
+    val chosen = notes.filter { it.id in selected }
+    val ids = chosen.map { it.id }
+
+    fun clear() {
+        selected = emptySet()
+        asking = Ask.NONE
+    }
+
+    fun act(block: suspend () -> Unit) {
+        scope.launch { block() }
+        clear()
+    }
+
     val pinned = notes.filter { it.pinned }
     val others = notes.filterNot { it.pinned }
     val gridState = rememberLazyStaggeredGridState()
@@ -87,17 +119,35 @@ fun NotesListScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            NotesSearchBar(
-                query = query,
-                onQueryChange = onQueryChange,
-                columns = columns,
-                onColumnsChange = onColumnsChange,
-                onMenu = onMenu,
-                folder = folder,
-            )
+            if (selected.isNotEmpty()) {
+                SelectionBar(
+                    count = selected.size,
+                    folder = folder,
+                    onClose = { clear() },
+                    onPin = {
+                        val pin = chosen.any { !it.pinned }
+                        act { repository.setPinned(ids, pin) }
+                    },
+                    onColor = { asking = Ask.COLOR },
+                    onLabels = { asking = Ask.LABELS },
+                    onArchive = { act { repository.archive(ids) } },
+                    onTrash = { act { repository.moveToTrash(ids) } },
+                    onRestore = { act { repository.restore(ids) } },
+                    onDeleteForever = { asking = Ask.DELETE },
+                )
+            } else {
+                NotesSearchBar(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    columns = columns,
+                    onColumnsChange = onColumnsChange,
+                    onMenu = onMenu,
+                    folder = folder,
+                )
+            }
         },
         floatingActionButton = {
-            if (folder == Folder.NOTES) {
+            if (folder == Folder.NOTES && selected.isEmpty()) {
                 CreateButtons(onCreate = onCreate)
             }
         },
@@ -125,7 +175,15 @@ fun NotesListScreen(
                     items(pinned, key = { "pinned-${it.id}" }) { note ->
                         NoteCard(
                             note = note,
-                            onClick = { onOpen(note.id) },
+                            selected = note.id in selected,
+                            onClick = {
+                                if (selected.isEmpty()) {
+                                    onOpen(note.id)
+                                } else {
+                                    selected = toggle(selected, note.id)
+                                }
+                            },
+                            onLongClick = { selected = toggle(selected, note.id) },
                             modifier = Modifier.animateItem(),
                         )
                     }
@@ -138,14 +196,43 @@ fun NotesListScreen(
                 items(if (query.isBlank()) others else notes, key = { it.id }) { note ->
                     NoteCard(
                         note = note,
-                        onClick = { onOpen(note.id) },
+                        selected = note.id in selected,
+                        onClick = {
+                            if (selected.isEmpty()) {
+                                onOpen(note.id)
+                            } else {
+                                selected = toggle(selected, note.id)
+                            }
+                        },
+                        onLongClick = { selected = toggle(selected, note.id) },
                         modifier = Modifier.animateItem(),
                     )
                 }
             }
         }
     }
+
+    Dialogs(
+        asking = asking,
+        labelsOfSelection = chosen.flatMap { it.labels }.toSet(),
+        allLabels = allLabels,
+        onClose = { asking = Ask.NONE },
+        onColor = { color -> act { repository.setColor(ids, color) } },
+        onLabel = { name, on -> scope.launch { repository.setLabel(ids, name, on) } },
+        onDelete = {
+            val targets = ids
+            act {
+                val files = repository.deleteForever(targets)
+                for (file in files) AppGraph.attachments.delete(file)
+            }
+        },
+    )
 }
+
+private enum class Ask { NONE, COLOR, LABELS, DELETE }
+
+private fun toggle(selected: Set<Long>, id: Long): Set<Long> =
+    if (id in selected) selected - id else selected + id
 
 /**
  * Keep's pill on top. Written from Material pieces rather than the M3
@@ -274,6 +361,35 @@ private fun EmptyState(folder: Folder, searching: Boolean, modifier: Modifier = 
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
             modifier = Modifier.padding(40.dp),
+        )
+    }
+}
+
+@Composable
+private fun Dialogs(
+    asking: Ask,
+    labelsOfSelection: Set<String>,
+    allLabels: List<String>,
+    onClose: () -> Unit,
+    onColor: (com.amehrug.app.model.NoteColor) -> Unit,
+    onLabel: (String, Boolean) -> Unit,
+    onDelete: () -> Unit,
+) {
+    when (asking) {
+        Ask.NONE -> Unit
+        Ask.COLOR -> ColorDialog(onDismiss = onClose, onPick = onColor)
+        Ask.LABELS -> LabelDialog(
+            labels = allLabels,
+            checked = labelsOfSelection,
+            onToggle = onLabel,
+            onCreate = { name -> onLabel(name, true) },
+            onDismiss = onClose,
+        )
+        Ask.DELETE -> ConfirmDialog(
+            title = R.string.action_delete_forever,
+            message = R.string.delete_forever_message,
+            onConfirm = onDelete,
+            onDismiss = onClose,
         )
     }
 }

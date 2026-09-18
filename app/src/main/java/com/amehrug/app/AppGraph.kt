@@ -2,6 +2,7 @@ package com.amehrug.app
 
 import android.app.Application
 import com.amehrug.app.backup.BackupManager
+import com.amehrug.app.backup.NotallyImporter
 import com.amehrug.app.crypto.AttachmentStore
 import com.amehrug.app.crypto.KeyVault
 import com.amehrug.app.data.NoteRepository
@@ -34,6 +35,8 @@ object AppGraph {
     val settings: SettingsRepository by lazy { SettingsRepository(database) }
 
     val backup: BackupManager by lazy { BackupManager(app, notes, attachments) }
+
+    val notallyImport: NotallyImporter by lazy { NotallyImporter(app, notes, attachments) }
 
     /** Locked until the settings say otherwise. */
     val lock: AppLock = AppLock()

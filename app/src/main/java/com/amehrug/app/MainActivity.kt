@@ -145,6 +145,7 @@ private fun AmehrugRoot(settings: AppSettings) {
     var editorId by rememberSaveable { mutableStateOf(0L) }
     var editorType by rememberSaveable { mutableStateOf(NoteType.NOTE.name) }
     var folderName by rememberSaveable { mutableStateOf(Folder.NOTES.name) }
+    var labelFilter by rememberSaveable { mutableStateOf("") }
     var query by rememberSaveable { mutableStateOf("") }
     var columns by rememberSaveable { mutableStateOf(2) }
 
@@ -161,6 +162,9 @@ private fun AmehrugRoot(settings: AppSettings) {
 
     val drawer = rememberDrawerState(DrawerValue.Closed)
     val scope = rememberCoroutineScope()
+    val labels by produceState(initialValue = emptyList<String>()) {
+        AppGraph.notes.observeLabels().collect { value = it }
+    }
 
     BackHandler(enabled = screenName != NOTES) { screenName = NOTES }
 
@@ -176,18 +180,41 @@ private fun AmehrugRoot(settings: AppSettings) {
                 )
                 DrawerRow(R.string.folder_notes, R.drawable.ic_checklist, folder == Folder.NOTES) {
                     folderName = Folder.NOTES.name
+                    labelFilter = ""
                     screenName = NOTES
                     scope.launch { drawer.close() }
                 }
                 DrawerRow(R.string.folder_archive, R.drawable.ic_archive, folder == Folder.ARCHIVED) {
                     folderName = Folder.ARCHIVED.name
+                    labelFilter = ""
                     screenName = NOTES
                     scope.launch { drawer.close() }
                 }
                 DrawerRow(R.string.folder_trash, R.drawable.ic_delete, folder == Folder.DELETED) {
                     folderName = Folder.DELETED.name
+                    labelFilter = ""
                     screenName = NOTES
                     scope.launch { drawer.close() }
+                }
+                if (labels.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.drawer_labels),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 28.dp, top = 16.dp, bottom = 4.dp),
+                    )
+                    for (label in labels) {
+                        DrawerRow(
+                            label = label,
+                            icon = R.drawable.ic_checklist,
+                            selected = labelFilter == label,
+                        ) {
+                            labelFilter = label
+                            folderName = Folder.NOTES.name
+                            screenName = NOTES
+                            scope.launch { drawer.close() }
+                        }
+                    }
                 }
                 DrawerRow(R.string.settings_title, R.drawable.ic_settings, screenName == SETTINGS) {
                     screenName = SETTINGS
@@ -220,6 +247,7 @@ private fun AmehrugRoot(settings: AppSettings) {
             when (current) {
                 Screen.Notes -> NotesListScreen(
                     folder = folder,
+                    label = labelFilter.ifEmpty { null },
                     query = query,
                     onQueryChange = { query = it },
                     columns = columns,
@@ -255,8 +283,13 @@ private const val DIAGNOSTICS = "diagnostics"
 
 @Composable
 private fun DrawerRow(label: Int, icon: Int, selected: Boolean, onClick: () -> Unit) {
+    DrawerRow(stringResource(label), icon, selected, onClick)
+}
+
+@Composable
+private fun DrawerRow(label: String, icon: Int, selected: Boolean, onClick: () -> Unit) {
     NavigationDrawerItem(
-        label = { Text(stringResource(label)) },
+        label = { Text(label) },
         icon = {
             Icon(painter = painterResource(icon), contentDescription = null)
         },

@@ -1,5 +1,9 @@
 package com.amehrug.app.ui.notes
 
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.border
@@ -33,6 +37,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateList
@@ -41,16 +46,21 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.amehrug.app.AppGraph
 import com.amehrug.app.R
+import com.amehrug.app.diagnostics.Diagnostics
+import com.amehrug.app.model.Attachment
+import com.amehrug.app.model.AttachmentKind
 import com.amehrug.app.model.ListItem
 import com.amehrug.app.model.Note
 import com.amehrug.app.model.NoteColor
 import com.amehrug.app.model.NoteType
+import com.amehrug.app.ui.media.ImageLoader
 import com.amehrug.app.ui.theme.noteContainerColor
 import kotlinx.coroutines.launch
 
@@ -73,6 +83,12 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
     var type by remember(noteId) { mutableStateOf(newType) }
     val items = remember(noteId) { mutableListOf<ListItem>().toMutableStateList() }
     var showColors by remember { mutableStateOf(false) }
+    val attachments = remember(noteId) { mutableListOf<Attachment>().toMutableStateList() }
+    // The identifier the note ends up with. A picture cannot be attached to
+    // a note that does not exist yet, so adding one saves it first.
+    var savedId by remember(noteId) { mutableStateOf(noteId) }
+    val scope = rememberCoroutineScope()
+    val context = LocalContext.current
 
     LaunchedEffect(noteId) {
         if (noteId != 0L) {
@@ -86,6 +102,9 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
                 type = note.type
                 items.clear()
                 items.addAll(note.items)
+                attachments.clear()
+                attachments.addAll(note.attachments)
+                savedId = note.id
             }
             loaded = true
         }
@@ -94,7 +113,7 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
     // Read at the moment the screen leaves, never a stale copy.
     val current = rememberUpdatedState(
         Note(
-            id = original.id,
+            id = savedId,
             type = type,
             folder = original.folder,
             color = color,
@@ -102,7 +121,7 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
             body = body,
             items = items.toList(),
             labels = original.labels,
-            attachments = original.attachments,
+            attachments = attachments.toList(),
             reminders = original.reminders,
             pinned = pinned,
             createdAt = original.createdAt,
@@ -121,6 +140,48 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
     fun leave() {
         save()
         onClose()
+    }
+
+    val picker = rememberLauncherForActivityResult(
+        ActivityResultContracts.PickVisualMedia(),
+    ) { uri ->
+        if (uri != null) {
+            scope.launch {
+                try {
+                    // The note must exist before a file can point at it.
+                    if (savedId == 0L) {
+                        val id = repository.save(current.value, force = true)
+                        if (id > 0) savedId = id
+                    }
+                    if (savedId == 0L) return@launch
+                    val stored = context.contentResolver.openInputStream(uri)?.use { input ->
+                        AppGraph.attachments.write(input)
+                    } ?: return@launch
+                    val mime = context.contentResolver.getType(uri) ?: "image/jpeg"
+                    val attachment = Attachment(
+                        kind = AttachmentKind.IMAGE,
+                        fileName = stored,
+                        mimeType = mime,
+                        sizeBytes = AppGraph.attachments.sizeOf(stored),
+                        createdAt = System.currentTimeMillis(),
+                    )
+                    val rowId = repository.addAttachment(savedId, attachment, attachments.size)
+                    attachments.add(attachment.copy(id = rowId))
+                } catch (e: Exception) {
+                    Diagnostics.log.error("media", "adding a picture", e)
+                    Toast.makeText(context, R.string.attachment_failed, Toast.LENGTH_SHORT).show()
+                }
+            }
+        }
+    }
+
+    fun removeAttachment(attachment: Attachment) {
+        attachments.remove(attachment)
+        scope.launch {
+            val file = repository.removeAttachment(attachment.id) ?: return@launch
+            ImageLoader.forget(file)
+            AppGraph.attachments.delete(file)
+        }
     }
 
     val background by animateColorAsState(
@@ -151,6 +212,18 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
                                 if (pinned) R.drawable.ic_pin else R.drawable.ic_pin_off,
                             ),
                             contentDescription = stringResource(R.string.action_pin),
+                        )
+                    }
+                    IconButton(
+                        onClick = {
+                            picker.launch(
+                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                            )
+                        },
+                    ) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_add),
+                            contentDescription = stringResource(R.string.attachment_add),
                         )
                     }
                     IconButton(onClick = { showColors = !showColors }) {
@@ -208,6 +281,7 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
                 style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
             )
+            AttachmentStrip(attachments = attachments, onRemove = { removeAttachment(it) })
             if (!loaded) return@Column
             when (type) {
                 NoteType.NOTE -> EditorField(

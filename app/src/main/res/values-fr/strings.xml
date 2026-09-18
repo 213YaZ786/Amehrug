@@ -92,4 +92,26 @@
         <item quantity="one">%d ligne de plus</item>
         <item quantity="other">%d lignes de plus</item>
     </plurals>
+    <string name="action_clear_selection">Annuler la sélection</string>
+    <string name="action_labels">Étiquettes</string>
+    <string name="action_restore">Remettre</string>
+    <string name="action_unarchive">Sortir de l\'archive</string>
+    <string name="action_delete_forever">Supprimer définitivement</string>
+    <string name="action_close">Fermer</string>
+    <string name="color_none">Sans couleur</string>
+    <string name="label_new">Nouvelle étiquette</string>
+    <string name="label_add">Ajouter cette étiquette</string>
+    <string name="drawer_labels">Étiquettes</string>
+    <string name="delete_forever_message">Ces notes et leurs fichiers partent définitivement. Rien ne les ramène.</string>
+    <string name="notally_import">Importer depuis Notally</string>
+    <string name="notally_import_summary">Lit un zip de sauvegarde fait par Notally. Vos notes sont ajoutées, rien d\'ici n\'est touché.</string>
+    <string name="notally_done">Importé : %1$d notes, %2$d fichiers.</string>
+    <string name="notally_failed">Rien n\'a été importé. Ce fichier ne ressemble pas à une sauvegarde Notally.</string>
+    <string name="attachment_add">Ajouter une image</string>
+    <string name="attachment_image">Image</string>
+    <string name="attachment_audio">Enregistrement, %1$d min %2$d s</string>
+    <string name="attachment_file">Fichier</string>
+    <string name="attachment_remove">Supprimer</string>
+    <string name="attachment_no_player">La lecture des enregistrements viendra plus tard. Le fichier est conservé, chiffré.</string>
+    <string name="attachment_failed">Cette image n\'a pas pu être ajoutée.</string>
 </resources>

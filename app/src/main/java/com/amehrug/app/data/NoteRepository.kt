@@ -57,14 +57,15 @@ class NoteRepository(
      * is not stored and 0 is returned, so opening the editor and leaving
      * does not litter the list.
      */
-    suspend fun save(note: Note): Long = write(note, keepDates = false)
+    suspend fun save(note: Note, force: Boolean = false): Long =
+        write(note, keepDates = false, force = force)
 
     /** Restores a note as it was, with a new identifier and its original dates. */
-    suspend fun importNote(note: Note): Long = write(note.copy(id = 0), keepDates = true)
+    suspend fun importNote(note: Note): Long = write(note.copy(id = 0), keepDates = true, force = true)
 
-    private suspend fun write(note: Note, keepDates: Boolean): Long {
+    private suspend fun write(note: Note, keepDates: Boolean, force: Boolean = false): Long {
         val clean = NoteRules.sanitize(note)
-        if (clean.id == 0L && NoteRules.isEmpty(clean) && clean.attachments.isEmpty()) return 0
+        if (!force && clean.id == 0L && NoteRules.isEmpty(clean) && clean.attachments.isEmpty()) return 0
         return notes.saveFull(
             note = clean.toEntity(clock(), keepModified = keepDates),
             spans = clean.spanRows(),
@@ -140,6 +141,12 @@ class NoteRepository(
     }
 
     suspend fun deleteLabel(name: String): Boolean = labels.delete(name) > 0
+
+    /** Adds or removes one label across several notes at once. */
+    suspend fun setLabel(ids: List<Long>, raw: String, on: Boolean) {
+        val name = NoteRules.normalizeLabel(raw) ?: return
+        if (on) notes.setLabel(ids, name) else notes.unsetLabel(ids, name)
+    }
 }
 
 data class PurgeResult(val notes: Int, val files: List<String>)

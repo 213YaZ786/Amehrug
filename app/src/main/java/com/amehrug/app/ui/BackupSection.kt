@@ -60,6 +60,32 @@ fun BackupSection(rowContent: @Composable (String, String?, Boolean, () -> Unit)
         ActivityResultContracts.OpenDocument(),
     ) { uri -> if (uri != null) ask = Ask.Restore(uri) }
 
+    // Notally's own backup carries no password, so this one needs no dialog.
+    val notallyPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            working = true
+            scope.launch {
+                try {
+                    val report = AppGraph.notallyImport.importFrom(uri)
+                    toast(
+                        context.getString(
+                            R.string.notally_done,
+                            report.notes,
+                            report.files,
+                        ),
+                    )
+                } catch (e: Exception) {
+                    Diagnostics.log.error("import", "reading a Notally backup", e)
+                    toast(context.getString(R.string.notally_failed))
+                } finally {
+                    working = false
+                }
+            }
+        }
+    }
+
     fun toast(message: String) = Toast.makeText(context, message, Toast.LENGTH_LONG).show()
 
     rowContent(
@@ -76,6 +102,13 @@ fun BackupSection(rowContent: @Composable (String, String?, Boolean, () -> Unit)
         !working,
     ) {
         restorePicker.launch(arrayOf("*/*"))
+    }
+    rowContent(
+        stringResource(R.string.notally_import),
+        stringResource(R.string.notally_import_summary),
+        !working,
+    ) {
+        notallyPicker.launch(arrayOf("*/*"))
     }
     if (working) {
         Column(modifier = Modifier.padding(16.dp)) {

@@ -5,20 +5,15 @@ Private notes for Android. Offline, always.
 Amehrug never asks for network access. Notes stay on the phone and leave it
 only when you export them. The name comes from Kabyle.
 
-Status: early rewrite, nothing usable yet. See `docs/02-ROADMAP.md`.
+Status: early rewrite, not ready for daily use yet.
 
-## What it does today
+## What it does
 
-- Opens an encrypted database, with no permission at all.
-- Locks behind your fingerprint, face or screen lock.
-- Writes and reads a backup sealed with a password you choose.
-
-## Goals
-
-- No INTERNET permission, no analytics, no account, no cloud backup.
-- Notes, media and backups encrypted on the device.
-- Jetpack Compose with Material You, Android 12 and later.
-- Imports backups made by Notally.
+- Notes and checklists, pinned, coloured, labelled, archived or binned.
+- Full text search that ignores case and accents.
+- A lock behind your fingerprint, face or screen lock.
+- A backup sealed with a password you choose.
+- No permission at all. Not even network.
 
 ## Encryption
 
@@ -26,11 +21,15 @@ Status: early rewrite, nothing usable yet. See `docs/02-ROADMAP.md`.
 - Attachments: AES-256-GCM, one sealed file each, in private storage.
 - Backups: AES-256-GCM, key derived from your password with Argon2id.
 
+## Build
+
+Android Studio, or `./gradlew assembleDebug`. Requires JDK 21.
+Every push to `main` publishes a signed APK per architecture in Releases.
+
 ## Credits
 
 Amehrug is a fork of [Notally](https://github.com/OmGodse/Notally) by OMGodse,
-released under the GNU General Public License v3. Its source is not copied
-here, only the design lessons and the ability to read its backups.
+released under the GNU General Public License v3.
 
 ## License
 

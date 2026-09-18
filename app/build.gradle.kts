@@ -14,8 +14,8 @@ android {
         applicationId = "com.amehrug.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 12
-        versionName = "0.7.0"
+        versionCode = 18
+        versionName = "0.10.0"
     }
 
     // Signing comes from the environment, so no key and no password is ever
@@ -47,6 +47,19 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro",
             )
+        }
+    }
+
+    // One APK per architecture, plus a universal one for anything else.
+    // SQLCipher ships four native builds, and they are most of the size.
+    // If this DSL ever moves, removing the whole block leaves one working
+    // APK and nothing else changes.
+    splits {
+        abi {
+            isEnable = true
+            reset()
+            include("armeabi-v7a", "arm64-v8a", "x86", "x86_64")
+            isUniversalApk = true
         }
     }
 

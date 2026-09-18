@@ -114,6 +114,17 @@ abstract class NoteDao {
         return id
     }
 
+    @Query("DELETE FROM note_labels WHERE noteId IN (:ids) AND labelName = :label")
+    abstract suspend fun unsetLabel(ids: List<Long>, label: String)
+
+    /** Puts [label] on every note of [ids], creating the label if needed. */
+    @Transaction
+    open suspend fun setLabel(ids: List<Long>, label: String) {
+        if (ids.isEmpty()) return
+        insertLabels(listOf(LabelEntity(label)))
+        insertNoteLabels(ids.map { NoteLabelEntity(noteId = it, labelName = label) })
+    }
+
     @Query("UPDATE notes SET pinned = :pinned WHERE id IN (:ids)")
     abstract suspend fun setPinned(ids: List<Long>, pinned: Boolean)
 
