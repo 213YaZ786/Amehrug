@@ -1,9 +1,9 @@
-# Amehrug, state at 0.5.0
+# Amehrug, state at 0.6.0
 
 Amehrug is an offline, private note taking app for Android. It is a fork of
 Notally 6.2 by OMGodse (`com.omgodse.notally`), rewritten in Jetpack Compose.
 
-`com.amehrug.app`, versionCode 9, versionName 0.5.0, minSdk 31, compileSdk and
+`com.amehrug.app`, versionCode 10, versionName 0.6.0, minSdk 31, compileSdk and
 targetSdk 37. AGP 9.4.0 with built-in Kotlin, Gradle 9.7.1, Kotlin 2.4.0
 (Compose compiler plugin), Compose 1.12.1, material3 1.4.0, activity 1.13.0,
 core 1.19.0, Room 2.8.5 with KSP 2.3.11, kotlinx.coroutines 1.11.0, SQLCipher for Android 4.18.0 with androidx.sqlite 2.7.0. Versions read on developer.android.com and plugins.gradle.org on
@@ -14,9 +14,9 @@ Roadmap task 1 is done: one screen, dynamic color, edge to edge, original
 adaptive icon with a monochrome layer, English and French strings, no
 permission, backup off. Never built in the sandbox (no Android SDK).
 
-The Notally source sits in `reference/notally-6.2`, outside the build. The
-Gradle wrapper jar and scripts were copied from Notally. Only the properties
-file was changed to Gradle 9.7.1.
+The Notally source is not in this repository. The Gradle wrapper jar and
+scripts were copied from it, and the wrapper jar was recognised as a known
+good one by `gradle/actions/wrapper-validation` in CI.
 
 ## Identity
 
@@ -89,26 +89,35 @@ These are the reasons the security track exists. None may survive the rewrite.
    too old, `gradle wrapper --gradle-version 9.7.1` regenerates it.
 2. The permission check in CI assumes aapt2 prints `uses-permission` lines.
    Read its output in the first run log before trusting a green result.
-3. Nine versions stacked without a build (0.1.0 to 0.5.0). The first failure
-   log must be read file by file. Most likely places, in order: KSP with
-   built-in Kotlin, the Room annotations on the entities, the DAO queries
-   (Room checks them at compile time).
+3. First CI run: 0.5.0 reached `kspReleaseKotlin` and failed there, fixed in 0.6.0. The first failure
+   log must be read file by file.
+
+   What the first run proved on 2026-09-18: the wrapper is valid, Gradle
+   9.7.1 and AGP 9.4.0 run, KSP and Room accept every entity and query
+   (`kspDebugKotlin` passed), the manifest merges, and the native libraries
+   of SQLCipher are packed. Only the schema export failed.
 4. After the first local build, commit `app/schemas/`. The version 1 JSON is
    the base of every migration.
 5. Reminders are replaced on every save, so their row ids change. Task 16
    must key alarms on the note id and the time, never on the row id.
-6. **The riskiest point of the build**: FTS4 with the unicode61 tokenizer
+6. The manifest merger warns that INTERNET and ACCESS_NETWORK_STATE are
+   removed while nobody declares them. That is the point: the guard is there
+   for the day a library does.
+7. **The riskiest point of the build**: FTS4 with the unicode61 tokenizer
    under SQLCipher. If the first run fails while creating `notes_fts`, the
    fallback is one line in `Entities.kt`: drop the `tokenizer` argument of
    `@Fts4`, which loses accent folding in search until FTS5 is tried.
-7. SQLCipher is resolved by plain coordinates. If Gradle pulls no artifact,
+8. SQLCipher is resolved by plain coordinates. If Gradle pulls no artifact,
    the README form is `net.zetetic:sqlcipher-android:4.18.0@aar`.
-8. The lock cannot be tried in an emulator without a screen lock set: the
+9. The lock cannot be tried in an emulator without a screen lock set: the
    switch stays greyed out, which is the intended behaviour.
-9. PBKDF2 at 600000 iterations takes a noticeable moment on a phone, once
+10. Argon2id asks for 64 MiB at once, for the time of a backup. If a low end
+   phone kills the app there, the fallback is `BackupCrypto.DEFAULT_KDF`,
+   already implemented, or a smaller memory figure.
+11. PBKDF2 at 600000 iterations takes a noticeable moment on a phone, once
    per backup or restore. Measure it in the log on the first real run and
    lower the number only if it is unbearable, never below 210000.
-10. Next: scheduled backup (task 8b), which needs WorkManager, a folder the
+12. Next: scheduled backup (task 8b), which needs WorkManager, a folder the
    user grants, and the backup password wrapped by the Keystore.
 
 ## Diagnostics, since 0.1.3
@@ -268,7 +277,8 @@ and settings values that are damaged, unknown or not numbers.
 Manual for now, from the settings screen. Scheduling is task 8b.
 
 - **One file**, extension `.amb`: a zip holding `amehrug.json` and the
-  attachments, wrapped in AES-256-GCM. The key comes from the user's password
+  attachments, wrapped in AES-256-GCM. The key comes from the password
+  through Argon2id. The key comes from the user's password
   through PBKDF2-HMAC-SHA256, 600000 iterations, with a random salt. Salt and
   iteration count sit in the header, so a file written today still opens when
   those numbers change.
@@ -298,3 +308,30 @@ backup round trip keeps text, styles, items, labels, reminders and dates,
 identifiers are not restored, an attachment path is dropped, and the sealed
 file is refused on a wrong password, a cut file, an edited byte, or a file
 that is not ours.
+
+## Key derivation, reviewed in 0.6.0
+
+The OWASP Password Storage cheat sheet, read on 2026-09-18, puts **Argon2id**
+first, with at least 19 MiB of memory, 2 passes and 1 lane. It keeps PBKDF2
+with 600000 HMAC-SHA256 iterations only for the case where FIPS compliance
+forces it, and calls it the weakest of the four against graphics cards.
+
+So the backup password now goes through Argon2id with the offline numbers of
+RFC 9106: **64 MiB, three passes, four lanes**. Android has no memory hard
+derivation of its own, so this comes from Bouncy Castle 1.86, pure Java,
+lightweight API only, no provider registered and no reflection.
+
+Verified: the version by the `r1rv86` tag of the official repository, and the
+exact method names by reading `Argon2Parameters.java` and
+`Argon2BytesGenerator.java` in that tag. The harness stubs carry those
+signatures. What is **not** verified here is Argon2id running, because no
+Bouncy Castle jar can be fetched in the sandbox.
+
+The rest was reviewed against the same sources and left unchanged, because it
+is already current practice: AES-256-GCM with 96 bit nonces for the database,
+the media and the backups, keys of 256 bits, `SecureRandom` for every nonce
+and salt, and hardware backed key storage in the Android Keystore, StrongBox
+when the phone has one.
+
+The file header now carries which derivation was used and its numbers, so
+raising them later, or moving to something newer, leaves old backups readable.

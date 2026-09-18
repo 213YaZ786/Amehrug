@@ -107,6 +107,11 @@ it cannot work.
   believing it.
 - A check with a cheap escape hatch hid a whole class of failure. Ask what it
   lets through.
+- Two build variants wrote the same generated file at the same time. Room's
+  `room.schemaLocation` argument was given to KSP, so the debug and release
+  tasks exported the schema to one path at once, and release read a half
+  written file. Generated output must have one writer per variant. Use the
+  tool's own plugin when it offers one.
 - Removing a stored setting must not crash on an old file. Every JSON decoder
   uses `ignoreUnknownKeys = true`.
 

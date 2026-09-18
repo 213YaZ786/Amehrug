@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.room)
 }
 
 android {
@@ -13,8 +14,8 @@ android {
         applicationId = "com.amehrug.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 9
-        versionName = "0.5.0"
+        versionCode = 10
+        versionName = "0.6.0"
     }
 
     buildTypes {
@@ -59,10 +60,18 @@ android {
     }
 }
 
-// Room writes one JSON file per schema version here. Commit them: they are
-// the reference for every future migration.
+// Room writes one JSON file per schema version here, in a folder per variant.
+// Commit them: they are the reference for every future migration.
+//
+// The Room plugin does this, not `ksp { arg("room.schemaLocation") }`: with
+// the ksp argument, the debug and release tasks write the same file at the
+// same time, and the release build read a half written file. That is what
+// broke the first CI run.
+room {
+    schemaDirectory("$projectDir/schemas")
+}
+
 ksp {
-    arg("room.schemaLocation", "$projectDir/schemas")
     arg("room.generateKotlin", "true")
 }
 
@@ -84,4 +93,8 @@ dependencies {
     // for Android README, read on 2026-09-17.
     implementation(libs.sqlcipher.android)
     implementation(libs.androidx.sqlite)
+
+    // Argon2id for the backup password. Android has no memory hard key
+    // derivation of its own, and OWASP puts Argon2id first.
+    implementation(libs.bouncycastle)
 }

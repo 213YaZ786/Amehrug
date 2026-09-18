@@ -1,4 +1,5 @@
 import com.amehrug.app.crypto.BackupCrypto
+import com.amehrug.app.crypto.BackupHeader
 import com.amehrug.app.model.Attachment
 import com.amehrug.app.model.AttachmentKind
 import com.amehrug.app.model.BackupContent
@@ -86,11 +87,44 @@ fun main() {
     val escaping = BackupFormat.encode(content.copy(notes = listOf(note.copy(attachments = listOf(fileNameAttack())))))
     good(BackupFormat.decode(escaping).notes[0].attachments.isEmpty(), "attachment path is refused")
 
-    // Password envelope
+    // Header
+    val header = BackupHeader(
+        kdf = BackupHeader.KDF_ARGON2ID,
+        salt = ByteArray(16) { it.toByte() },
+        memoryKib = 65536,
+        iterations = 3,
+        parallelism = 4,
+    )
+    good(BackupHeader.decode(BackupHeader.encode(header)) == header, "backup header round trip")
+    good(BackupHeader.encode(header).size == BackupHeader.SIZE, "header is 32 bytes")
+    refused("header too short") { BackupHeader.decode(BackupHeader.encode(header).copyOf(20)) }
+    refused("wrong magic in header") {
+        val bad = BackupHeader.encode(header)
+        bad[1] = 'X'.code.toByte()
+        BackupHeader.decode(bad)
+    }
+    refused("newer header version") {
+        val bad = BackupHeader.encode(header)
+        bad[5] = 9
+        BackupHeader.decode(bad)
+    }
+    refused("unknown derivation") {
+        val bad = BackupHeader.encode(header)
+        bad[6] = 7
+        BackupHeader.decode(bad)
+    }
+    refused("absurd memory in header") {
+        BackupHeader.decode(BackupHeader.encode(header.copy(memoryKib = 900_000_000)))
+    }
+
+    // Password envelope, checked here with PBKDF2 because Argon2id needs
+    // Bouncy Castle, which is not on the harness classpath. The path under
+    // test is the same one, only the derivation differs.
     val plain = ByteArray(200_000).also { SecureRandom().nextBytes(it) }
     val sealed = ByteArrayOutputStream()
     val password = "correct horse battery".toCharArray()
-    BackupCrypto.encrypt(password, ByteArrayInputStream(plain), sealed, SecureRandom(), iterations = 1000)
+    val fast = BackupHeader(BackupHeader.KDF_PBKDF2, ByteArray(16) { 7 }, 1, 1000, 1)
+    BackupCrypto.encrypt(password, ByteArrayInputStream(plain), sealed, SecureRandom(), header = fast)
     val opened = ByteArrayOutputStream()
     BackupCrypto.decrypt(password, ByteArrayInputStream(sealed.toByteArray()), opened)
     good(opened.toByteArray().contentEquals(plain), "backup round trip with a password")
@@ -109,8 +143,10 @@ fun main() {
         BackupCrypto.decrypt(password, ByteArrayInputStream(ByteArray(64)), ByteArrayOutputStream())
     }
     val other = ByteArrayOutputStream()
-    BackupCrypto.encrypt(password, ByteArrayInputStream(plain), other, SecureRandom(), iterations = 1000)
+    BackupCrypto.encrypt(password, ByteArrayInputStream(plain), other, SecureRandom(), header = BackupCrypto.newHeader(SecureRandom(), BackupHeader.KDF_PBKDF2).copy(iterations = 1000))
     good(!other.toByteArray().contentEquals(sealed.toByteArray()), "two backups of the same notes differ")
+    good(BackupCrypto.newHeader(SecureRandom()).kdf == BackupHeader.KDF_ARGON2ID, "argon2id is the default")
+    good(BackupCrypto.newHeader(SecureRandom()).memoryKib == 65536, "argon2id asks for 64 MiB")
     println("ALL PASSED")
 }
 
