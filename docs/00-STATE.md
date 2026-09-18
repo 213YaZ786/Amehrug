@@ -1,12 +1,12 @@
-# Amehrug, state at 0.6.0
+# Amehrug, state at 0.7.0
 
 Amehrug is an offline, private note taking app for Android. It is a fork of
 Notally 6.2 by OMGodse (`com.omgodse.notally`), rewritten in Jetpack Compose.
 
-`com.amehrug.app`, versionCode 10, versionName 0.6.0, minSdk 31, compileSdk and
+`com.amehrug.app`, versionCode 12, versionName 0.7.0, minSdk 31, compileSdk and
 targetSdk 37. AGP 9.4.0 with built-in Kotlin, Gradle 9.7.1, Kotlin 2.4.0
 (Compose compiler plugin), Compose 1.12.1, material3 1.4.0, activity 1.13.0,
-core 1.19.0, Room 2.8.5 with KSP 2.3.11, kotlinx.coroutines 1.11.0, SQLCipher for Android 4.18.0 with androidx.sqlite 2.7.0. Versions read on developer.android.com and plugins.gradle.org on
+core 1.19.0, Room 2.8.5 with KSP 2.3.11, kotlinx.coroutines 1.11.0, SQLCipher for Android 4.19.0 with androidx.sqlite 2.7.0. Versions read on developer.android.com and plugins.gradle.org on
 2026-09-17. Individual versions are pinned instead of the Compose BOM, because
 the BOM number could not be read on an official page.
 
@@ -89,7 +89,7 @@ These are the reasons the security track exists. None may survive the rewrite.
    too old, `gradle wrapper --gradle-version 9.7.1` regenerates it.
 2. The permission check in CI assumes aapt2 prints `uses-permission` lines.
    Read its output in the first run log before trusting a green result.
-3. First CI run: 0.5.0 reached `kspReleaseKotlin` and failed there, fixed in 0.6.0. The first failure
+3. CI is green since 0.6.0. Nothing has run on a phone yet. The first failure
    log must be read file by file.
 
    What the first run proved on 2026-09-18: the wrapper is valid, Gradle
@@ -117,7 +117,14 @@ These are the reasons the security track exists. None may survive the rewrite.
 11. PBKDF2 at 600000 iterations takes a noticeable moment on a phone, once
    per backup or restore. Measure it in the log on the first real run and
    lower the number only if it is unbearable, never below 210000.
-12. Next: scheduled backup (task 8b), which needs WorkManager, a folder the
+12. Releasing needs four repository secrets, see `docs/03-RELEASING.md`.
+   Without them a tag still publishes, but an unsigned APK that no phone
+   installs.
+13. The interface has never been seen. Most likely to need a second pass:
+   the staggered grid spacing, the editor when the keyboard is open, and the
+   drawer gesture fighting the grid scroll.
+14. Next, either 10b (selection, swipe, labels, shared element transitions)
+   or the scheduled backup (task 8b), in whichever order you prefer, which needs WorkManager, a folder the
    user grants, and the backup password wrapped by the Keystore.
 
 ## Diagnostics, since 0.1.3
@@ -335,3 +342,55 @@ when the phone has one.
 
 The file header now carries which derivation was used and its numbers, so
 raising them later, or moving to something newer, leaves old backups readable.
+
+## Releasing, since 0.6.1
+
+A tag `v<versionName>` triggers `.github/workflows/release.yml`, which checks
+the wrapper, refuses to publish when the tag and `versionName` differ, builds
+the release APK, fails if the APK asks for any permission beyond AndroidX
+core's own, names the file, writes its SHA-256 and creates the GitHub release.
+
+The signing key never touches the repository: it arrives as four secrets and
+lives in the runner's temporary folder for the length of the build. Locally,
+a release build without those variables is simply unsigned.
+
+`docs/03-RELEASING.md` holds the commands, including the warning that matters:
+lose the key and no existing install can ever be updated.
+
+SQLCipher moved to 4.19.0, the version Dependabot proposed and built green on
+the repository.
+
+## Interface, since 0.7.0
+
+Keep's shape, drawn in pure Material You.
+
+- **The wall**: a staggered grid of cards, two columns or one, pinned notes
+  first under their own label, spacing of 10 dp, corners of 16 dp. Cards move
+  with `animateItem`, so a note that is pinned or edited slides into place
+  instead of jumping.
+- **Note colours** are tints over the theme, not fixed paint. DEFAULT takes
+  the wallpaper palette of the phone, and the eleven named colours keep
+  Notally's names so its backups map one to one, with a darker set for dark
+  mode. Text colour always comes from the theme, so every tint stays readable.
+- **The pill on top** is built from a Surface and a text field rather than the
+  Material 3 SearchBar, whose shape moves from release to release and which
+  brings a full screen mode this app does not want. Typing searches through
+  FTS, live.
+- **The drawer** holds Notes, Archive, Trash, Settings and Diagnostics.
+- **Two buttons** create a note or a list. The small one appears with a
+  spring.
+- **The editor** has a title, a body or a checklist, a colour row, a pin, and
+  archive and trash actions. It writes once, when the screen leaves, through
+  the process scope, so the back gesture is immediate and the database stays
+  quiet while someone types. A new note with nothing in it is not stored.
+- **Screen changes** use one spring, a scale of 0.92 to 1 with a fade, played
+  in reverse on the way back.
+- **Icons** are drawn here as vector drawables. No icon library, nothing
+  copied.
+
+Not done in this part: multi select, swipe to archive, restore and delete
+buttons in the trash, labels on a note, and the shared element transition from
+a card to the editor. That one is written down and verified for when it
+arrives: `Modifier.sharedElement(rememberSharedContentState(key = ...),
+animatedVisibilityScope = this@AnimatedContent)` inside a
+`SharedTransitionLayout`, confirmed on developer.android.com on 2026-09-18.

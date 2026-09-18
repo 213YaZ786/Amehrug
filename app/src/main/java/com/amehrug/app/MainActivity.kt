@@ -8,36 +8,52 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
-import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.amehrug.app.diagnostics.Diagnostics
 import com.amehrug.app.diagnostics.DiagnosticsScreen
 import com.amehrug.app.model.AppSettings
+import com.amehrug.app.model.Folder
+import com.amehrug.app.model.NoteType
 import com.amehrug.app.ui.LockScreen
 import com.amehrug.app.ui.SettingsScreen
+import com.amehrug.app.ui.notes.NoteEditorScreen
+import com.amehrug.app.ui.notes.NotesListScreen
 import com.amehrug.app.ui.theme.AmehrugTheme
+import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
 
@@ -111,22 +127,143 @@ private fun AmehrugApp() {
     }
 }
 
-// Three screens for now. A navigation library arrives with the notes list,
-// roadmap task 10.
-private enum class Screen { HOME, SETTINGS, DIAGNOSTICS }
+private sealed interface Screen {
+    data object Notes : Screen
+
+    data class Editor(val noteId: Long, val type: NoteType) : Screen
+
+    data object Settings : Screen
+
+    data object Diagnostics : Screen
+}
 
 @Composable
 private fun AmehrugRoot(settings: AppSettings) {
-    var screen by rememberSaveable { mutableStateOf(Screen.HOME) }
-    BackHandler(enabled = screen != Screen.HOME) { screen = Screen.HOME }
-    when (screen) {
-        Screen.HOME -> HomeScreen(
-            onSettings = { screen = Screen.SETTINGS },
-            onDiagnostics = { screen = Screen.DIAGNOSTICS },
+    // Saved as plain strings and numbers, which survive a rotation without a
+    // custom saver.
+    var screenName by rememberSaveable { mutableStateOf(NOTES) }
+    var editorId by rememberSaveable { mutableStateOf(0L) }
+    var editorType by rememberSaveable { mutableStateOf(NoteType.NOTE.name) }
+    var folderName by rememberSaveable { mutableStateOf(Folder.NOTES.name) }
+    var query by rememberSaveable { mutableStateOf("") }
+    var columns by rememberSaveable { mutableStateOf(2) }
+
+    val folder = Folder.entries.firstOrNull { it.name == folderName } ?: Folder.NOTES
+    val screen: Screen = when (screenName) {
+        SETTINGS -> Screen.Settings
+        DIAGNOSTICS -> Screen.Diagnostics
+        EDITOR -> Screen.Editor(
+            noteId = editorId,
+            type = NoteType.entries.firstOrNull { it.name == editorType } ?: NoteType.NOTE,
         )
-        Screen.SETTINGS -> SettingsScreen(settings = settings, onBack = { screen = Screen.HOME })
-        Screen.DIAGNOSTICS -> DiagnosticsScreen(onBack = { screen = Screen.HOME })
+        else -> Screen.Notes
     }
+
+    val drawer = rememberDrawerState(DrawerValue.Closed)
+    val scope = rememberCoroutineScope()
+
+    BackHandler(enabled = screenName != NOTES) { screenName = NOTES }
+
+    ModalNavigationDrawer(
+        drawerState = drawer,
+        gesturesEnabled = screenName == NOTES,
+        drawerContent = {
+            ModalDrawerSheet {
+                Text(
+                    text = stringResource(R.string.app_name),
+                    style = MaterialTheme.typography.titleLarge,
+                    modifier = Modifier.padding(start = 28.dp, top = 24.dp, bottom = 16.dp),
+                )
+                DrawerRow(R.string.folder_notes, R.drawable.ic_checklist, folder == Folder.NOTES) {
+                    folderName = Folder.NOTES.name
+                    screenName = NOTES
+                    scope.launch { drawer.close() }
+                }
+                DrawerRow(R.string.folder_archive, R.drawable.ic_archive, folder == Folder.ARCHIVED) {
+                    folderName = Folder.ARCHIVED.name
+                    screenName = NOTES
+                    scope.launch { drawer.close() }
+                }
+                DrawerRow(R.string.folder_trash, R.drawable.ic_delete, folder == Folder.DELETED) {
+                    folderName = Folder.DELETED.name
+                    screenName = NOTES
+                    scope.launch { drawer.close() }
+                }
+                DrawerRow(R.string.settings_title, R.drawable.ic_settings, screenName == SETTINGS) {
+                    screenName = SETTINGS
+                    scope.launch { drawer.close() }
+                }
+                DrawerRow(R.string.diagnostics_title, R.drawable.ic_more, screenName == DIAGNOSTICS) {
+                    screenName = DIAGNOSTICS
+                    scope.launch { drawer.close() }
+                }
+            }
+        },
+    ) {
+        // One spring for every screen change, so opening a note and coming
+        // back feel like the same movement played forwards and backwards.
+        AnimatedContent(
+            targetState = screen,
+            transitionSpec = {
+                val enter = scaleIn(
+                    animationSpec = spring(dampingRatio = 0.9f, stiffness = 380f),
+                    initialScale = 0.92f,
+                ) + fadeIn(spring(stiffness = 420f))
+                val exit = scaleOut(
+                    animationSpec = spring(dampingRatio = 0.9f, stiffness = 380f),
+                    targetScale = 0.96f,
+                ) + fadeOut(spring(stiffness = 420f))
+                enter togetherWith exit
+            },
+            label = "screen",
+        ) { current ->
+            when (current) {
+                Screen.Notes -> NotesListScreen(
+                    folder = folder,
+                    query = query,
+                    onQueryChange = { query = it },
+                    columns = columns,
+                    onColumnsChange = { columns = it },
+                    onMenu = { scope.launch { drawer.open() } },
+                    onOpen = { id ->
+                        editorId = id
+                        editorType = NoteType.NOTE.name
+                        screenName = EDITOR
+                    },
+                    onCreate = { type ->
+                        editorId = 0L
+                        editorType = type.name
+                        screenName = EDITOR
+                    },
+                )
+                is Screen.Editor -> NoteEditorScreen(
+                    noteId = current.noteId,
+                    newType = current.type,
+                    onClose = { screenName = NOTES },
+                )
+                Screen.Settings -> SettingsScreen(settings = settings, onBack = { screenName = NOTES })
+                Screen.Diagnostics -> DiagnosticsScreen(onBack = { screenName = NOTES })
+            }
+        }
+    }
+}
+
+private const val NOTES = "notes"
+private const val EDITOR = "editor"
+private const val SETTINGS = "settings"
+private const val DIAGNOSTICS = "diagnostics"
+
+@Composable
+private fun DrawerRow(label: Int, icon: Int, selected: Boolean, onClick: () -> Unit) {
+    NavigationDrawerItem(
+        label = { Text(stringResource(label)) },
+        icon = {
+            Icon(painter = painterResource(icon), contentDescription = null)
+        },
+        selected = selected,
+        onClick = onClick,
+        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
+    )
 }
 
 @Composable
@@ -149,56 +286,5 @@ private fun MessageScreen(message: String) {
                 modifier = Modifier.padding(top = 16.dp),
             )
         }
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun HomeScreen(onSettings: () -> Unit, onDiagnostics: () -> Unit) {
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            TopAppBar(
-                title = {},
-                actions = {
-                    TextButton(onClick = onSettings) {
-                        Text(stringResource(R.string.settings_title))
-                    }
-                    TextButton(onClick = onDiagnostics) {
-                        Text(stringResource(R.string.diagnostics_title))
-                    }
-                },
-            )
-        },
-    ) { insets ->
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(insets)
-                .padding(24.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally,
-        ) {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.displayMedium,
-                color = MaterialTheme.colorScheme.primary,
-            )
-            Text(
-                text = stringResource(R.string.tagline),
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-    }
-}
-
-@Preview(showBackground = true)
-@Composable
-private fun HomeScreenPreview() {
-    AmehrugTheme(dynamicColor = false) {
-        HomeScreen(onSettings = {}, onDiagnostics = {})
     }
 }

@@ -14,8 +14,24 @@ android {
         applicationId = "com.amehrug.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 10
-        versionName = "0.6.0"
+        versionCode = 12
+        versionName = "0.7.0"
+    }
+
+    // Signing comes from the environment, so no key and no password is ever
+    // in the repository. Without them the release build is simply unsigned,
+    // which keeps a local build working.
+    val keystore = providers.environmentVariable("AMEHRUG_KEYSTORE").orNull
+
+    signingConfigs {
+        if (keystore != null) {
+            create("release") {
+                storeFile = file(keystore)
+                storePassword = providers.environmentVariable("AMEHRUG_KEYSTORE_PASSWORD").orNull
+                keyAlias = providers.environmentVariable("AMEHRUG_KEY_ALIAS").orNull
+                keyPassword = providers.environmentVariable("AMEHRUG_KEY_PASSWORD").orNull
+            }
+        }
     }
 
     buildTypes {
@@ -24,6 +40,7 @@ android {
             versionNameSuffix = "-debug"
         }
         release {
+            if (keystore != null) signingConfig = signingConfigs.getByName("release")
             isMinifyEnabled = true
             isShrinkResources = true
             proguardFiles(

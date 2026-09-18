@@ -39,12 +39,16 @@ built, never written here from memory.
 
 ## Phase 2, parity with Notally, in Compose
 
-10. **Notes list.** Grid and list, pinned section, colors, labels, archive,
-    trash with auto purge, multi select with bulk actions.
-11. **Text editor.** Title and body, bold, italic, monospace, strikethrough,
-    links detected, undo and redo, autosave.
-12. **Checklists.** Drag to reorder, checked items moved to the bottom.
-13. **Search.** FTS with filters by type, color, label and date.
+10. **Notes list.** Grid and list, pinned section, colours, drawer, search,
+    and the editor. Done in 0.7.0. Left for 10b: multi select with bulk
+    actions, swipe to archive, restore and delete from the trash, labels on
+    the note, and shared element transitions between a card and the editor.
+11. **Text editor.** Plain title and body done in 0.7.0. Left: bold, italic,
+    monospace, strikethrough, links detected, undo and redo.
+12. **Checklists.** Typing, ticking and removing lines done in 0.7.0. Left:
+    drag to reorder, checked items moved to the bottom.
+13. **Search.** Full text search done in 0.7.0. Left: filters by type,
+    colour, label and date.
 14. **Images.** Pick, view with zoom, remove. Stored encrypted.
 15. **Audio.** Record with a foreground service, play back.
 16. **Reminders.** Exact alarms, notification channel, reboot handling.

@@ -56,4 +56,40 @@
     <string name="backup_failed">La sauvegarde n\'a pas pu être écrite.</string>
     <string name="restore_done">Restauré : %1$d notes, %2$d fichiers.</string>
     <string name="restore_failed">Rien n\'a été restauré. Mot de passe incorrect, ou fichier abîmé.</string>
+    <string name="action_menu">Ouvrir le menu</string>
+    <string name="action_layout">Changer la disposition</string>
+    <string name="action_clear_search">Effacer la recherche</string>
+    <string name="action_new_note">Nouvelle note</string>
+    <string name="action_new_list">Nouvelle liste</string>
+    <string name="action_pin">Épingler</string>
+    <string name="action_color">Couleur</string>
+    <string name="action_archive">Archiver</string>
+    <string name="action_delete">Mettre à la corbeille</string>
+    <string name="action_remove_item">Supprimer cette ligne</string>
+
+    <string name="folder_notes">Notes</string>
+    <string name="folder_archive">Archive</string>
+    <string name="folder_trash">Corbeille</string>
+
+    <string name="section_pinned">Épinglées</string>
+    <string name="section_others">Autres</string>
+
+    <string name="search_notes">Rechercher dans vos notes</string>
+    <string name="search_archive">Rechercher dans l\'archive</string>
+    <string name="search_trash">Rechercher dans la corbeille</string>
+
+    <string name="empty_notes">Rien pour l\'instant. Touchez le bouton pour écrire votre première note.</string>
+    <string name="empty_archive">Rien dans l\'archive.</string>
+    <string name="empty_trash">La corbeille est vide. Une note laissée ici part définitivement après 30 jours.</string>
+    <string name="empty_search">Aucune note ne correspond à ces mots.</string>
+
+    <string name="editor_title">Titre</string>
+    <string name="editor_body">Écrivez quelque chose</string>
+    <string name="editor_item">Élément de liste</string>
+    <string name="editor_add_item">Ajouter une ligne</string>
+
+    <plurals name="more_items">
+        <item quantity="one">%d ligne de plus</item>
+        <item quantity="other">%d lignes de plus</item>
+    </plurals>
 </resources>
