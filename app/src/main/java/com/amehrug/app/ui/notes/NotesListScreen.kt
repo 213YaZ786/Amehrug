@@ -9,14 +9,21 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.lazy.staggeredgrid.LazyVerticalStaggeredGrid
 import androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridCells
 import androidx.compose.foundation.lazy.staggeredgrid.items
@@ -54,6 +61,7 @@ import com.amehrug.app.R
 import com.amehrug.app.model.Folder
 import com.amehrug.app.model.Note
 import com.amehrug.app.model.NoteType
+import com.amehrug.app.ui.topBarInsets
 import kotlinx.coroutines.launch
 
 /**
@@ -73,6 +81,7 @@ fun NotesListScreen(
     columns: Int,
     onColumnsChange: (Int) -> Unit,
     onMenu: () -> Unit,
+    showMenu: Boolean,
     onOpen: (Long) -> Unit,
     onCreate: (NoteType) -> Unit,
 ) {
@@ -116,63 +125,98 @@ fun NotesListScreen(
     val others = notes.filterNot { it.pinned }
     val gridState = rememberLazyStaggeredGridState()
 
-    Scaffold(
-        modifier = Modifier.fillMaxSize(),
-        topBar = {
-            if (selected.isNotEmpty()) {
-                SelectionBar(
-                    count = selected.size,
-                    folder = folder,
-                    onClose = { clear() },
-                    onPin = {
-                        val pin = chosen.any { !it.pinned }
-                        act { repository.setPinned(ids, pin) }
-                    },
-                    onColor = { asking = Ask.COLOR },
-                    onLabels = { asking = Ask.LABELS },
-                    onArchive = { act { repository.archive(ids) } },
-                    onTrash = { act { repository.moveToTrash(ids) } },
-                    onRestore = { act { repository.restore(ids) } },
-                    onDeleteForever = { asking = Ask.DELETE },
-                )
+    // The width decides how many columns fit. The toggle in the bar stays
+    // meaningful everywhere: it picks the density, the screen picks the
+    // count. Measured rather than read from a window size class, so no extra
+    // library is needed and a foldable that opens is handled the same way.
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        val gridColumns = when {
+            maxWidth >= 1200.dp -> columns * 3
+            maxWidth >= 840.dp -> columns * 2
+            maxWidth >= 600.dp -> columns + 1
+            else -> columns
+        }
+
+        Scaffold(
+            modifier = Modifier.fillMaxSize(),
+            contentWindowInsets = WindowInsets.safeDrawing,
+            topBar = {
+                if (selected.isNotEmpty()) {
+                    SelectionBar(
+                        count = selected.size,
+                        folder = folder,
+                        onClose = { clear() },
+                        onPin = {
+                            val pin = chosen.any { !it.pinned }
+                            act { repository.setPinned(ids, pin) }
+                        },
+                        onColor = { asking = Ask.COLOR },
+                        onLabels = { asking = Ask.LABELS },
+                        onArchive = { act { repository.archive(ids) } },
+                        onTrash = { act { repository.moveToTrash(ids) } },
+                        onRestore = { act { repository.restore(ids) } },
+                        onDeleteForever = { asking = Ask.DELETE },
+                    )
+                } else {
+                    NotesSearchBar(
+                        query = query,
+                        onQueryChange = onQueryChange,
+                        columns = columns,
+                        onColumnsChange = onColumnsChange,
+                        onMenu = onMenu,
+                        showMenu = showMenu,
+                        folder = folder,
+                    )
+                }
+            },
+            floatingActionButton = {
+                if (folder == Folder.NOTES && selected.isEmpty()) {
+                    CreateButtons(onCreate = onCreate)
+                }
+            },
+        ) { insets ->
+            if (notes.isEmpty()) {
+                EmptyState(folder = folder, searching = query.isNotBlank(), modifier = Modifier.padding(insets))
             } else {
-                NotesSearchBar(
-                    query = query,
-                    onQueryChange = onQueryChange,
-                    columns = columns,
-                    onColumnsChange = onColumnsChange,
-                    onMenu = onMenu,
-                    folder = folder,
-                )
-            }
-        },
-        floatingActionButton = {
-            if (folder == Folder.NOTES && selected.isEmpty()) {
-                CreateButtons(onCreate = onCreate)
-            }
-        },
-    ) { insets ->
-        if (notes.isEmpty()) {
-            EmptyState(folder = folder, searching = query.isNotBlank(), modifier = Modifier.padding(insets))
-        } else {
-            LazyVerticalStaggeredGrid(
-                columns = StaggeredGridCells.Fixed(columns),
-                state = gridState,
-                modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(
-                    start = 12.dp,
-                    end = 12.dp,
-                    top = insets.calculateTopPadding() + 4.dp,
-                    bottom = insets.calculateBottomPadding() + 96.dp,
-                ),
-                verticalItemSpacing = 10.dp,
-                horizontalArrangement = Arrangement.spacedBy(10.dp),
-            ) {
-                if (pinned.isNotEmpty() && query.isBlank()) {
-                    item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
-                        SectionLabel(stringResource(R.string.section_pinned))
+                LazyVerticalStaggeredGrid(
+                    columns = StaggeredGridCells.Fixed(gridColumns),
+                    state = gridState,
+                    modifier = Modifier.fillMaxSize(),
+                    contentPadding = PaddingValues(
+                        start = 12.dp,
+                        end = 12.dp,
+                        top = insets.calculateTopPadding() + 4.dp,
+                        bottom = insets.calculateBottomPadding() + 96.dp,
+                    ),
+                    verticalItemSpacing = 10.dp,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp),
+                ) {
+                    if (pinned.isNotEmpty() && query.isBlank()) {
+                        item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
+                            SectionLabel(stringResource(R.string.section_pinned))
+                        }
+                        items(pinned, key = { "pinned-${it.id}" }) { note ->
+                            NoteCard(
+                                note = note,
+                                selected = note.id in selected,
+                                onClick = {
+                                    if (selected.isEmpty()) {
+                                        onOpen(note.id)
+                                    } else {
+                                        selected = toggle(selected, note.id)
+                                    }
+                                },
+                                onLongClick = { selected = toggle(selected, note.id) },
+                                modifier = Modifier.animateItem(),
+                            )
+                        }
+                        if (others.isNotEmpty()) {
+                            item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
+                                SectionLabel(stringResource(R.string.section_others))
+                            }
+                        }
                     }
-                    items(pinned, key = { "pinned-${it.id}" }) { note ->
+                    items(if (query.isBlank()) others else notes, key = { it.id }) { note ->
                         NoteCard(
                             note = note,
                             selected = note.id in selected,
@@ -187,26 +231,6 @@ fun NotesListScreen(
                             modifier = Modifier.animateItem(),
                         )
                     }
-                    if (others.isNotEmpty()) {
-                        item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
-                            SectionLabel(stringResource(R.string.section_others))
-                        }
-                    }
-                }
-                items(if (query.isBlank()) others else notes, key = { it.id }) { note ->
-                    NoteCard(
-                        note = note,
-                        selected = note.id in selected,
-                        onClick = {
-                            if (selected.isEmpty()) {
-                                onOpen(note.id)
-                            } else {
-                                selected = toggle(selected, note.id)
-                            }
-                        },
-                        onLongClick = { selected = toggle(selected, note.id) },
-                        modifier = Modifier.animateItem(),
-                    )
                 }
             }
         }
@@ -235,9 +259,13 @@ private fun toggle(selected: Set<Long>, id: Long): Set<Long> =
     if (id in selected) selected - id else selected + id
 
 /**
- * Keep's pill on top. Written from Material pieces rather than the M3
- * SearchBar, whose shape moves from release to release and which brings a
- * full screen mode this app does not want.
+ * The pill on top, floating over the wall rather than glued to the edges.
+ *
+ * Written from Material pieces rather than the M3 SearchBar, whose shape
+ * moves from release to release and which brings a full screen mode this app
+ * does not want. Unlike a TopAppBar it applies no window inset of its own,
+ * which is why topBarInsets is here: without it the pill sits under the
+ * status bar.
  */
 @Composable
 private fun NotesSearchBar(
@@ -246,61 +274,91 @@ private fun NotesSearchBar(
     columns: Int,
     onColumnsChange: (Int) -> Unit,
     onMenu: () -> Unit,
+    showMenu: Boolean,
     folder: Folder,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
-    Surface(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
-        shape = CircleShape,
-        color = MaterialTheme.colorScheme.surfaceContainerHigh,
-        contentColor = MaterialTheme.colorScheme.onSurface,
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .windowInsetsPadding(topBarInsets)
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center,
     ) {
-        Row(
-            modifier = Modifier.fillMaxWidth().height(52.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        Surface(
+            // Capped, so the pill stays a pill on a tablet instead of
+            // stretching into a banner.
+            modifier = Modifier.fillMaxWidth().widthIn(max = 720.dp),
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface,
         ) {
-            IconButton(onClick = onMenu) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_menu),
-                    contentDescription = stringResource(R.string.action_menu),
-                )
-            }
-            Box(modifier = Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
-                if (query.isEmpty()) {
-                    Text(
-                        text = stringResource(folderHint(folder)),
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+            Row(
+                modifier = Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (showMenu) {
+                    IconButton(onClick = onMenu) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_menu),
+                            contentDescription = stringResource(R.string.action_menu),
+                        )
+                    }
+                } else {
+                    Spacer(modifier = Modifier.width(12.dp))
+                }
+                Box(
+                    modifier = Modifier.weight(1f),
+                    // Centred while empty, which is the resting state and the
+                    // one that is looked at. It moves to the start as soon as
+                    // there is text to read.
+                    contentAlignment = if (query.isEmpty()) Alignment.Center else Alignment.CenterStart,
+                ) {
+                    if (query.isEmpty()) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                painter = painterResource(R.drawable.ic_search),
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                                modifier = Modifier.size(20.dp),
+                            )
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = stringResource(folderHint(folder)),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
+                    }
+                    BasicTextField(
+                        value = query,
+                        onValueChange = onQueryChange,
+                        singleLine = true,
+                        textStyle = MaterialTheme.typography.bodyLarge.copy(
+                            color = MaterialTheme.colorScheme.onSurface,
+                        ),
+                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+                        keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
+                        modifier = Modifier.fillMaxWidth(),
                     )
                 }
-                BasicTextField(
-                    value = query,
-                    onValueChange = onQueryChange,
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-                    keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
-            if (query.isNotEmpty()) {
-                IconButton(onClick = { onQueryChange("") }) {
+                if (query.isNotEmpty()) {
+                    IconButton(onClick = { onQueryChange("") }) {
+                        Icon(
+                            painter = painterResource(R.drawable.ic_close),
+                            contentDescription = stringResource(R.string.action_clear_search),
+                        )
+                    }
+                }
+                IconButton(onClick = { onColumnsChange(if (columns == 2) 1 else 2) }) {
                     Icon(
-                        painter = painterResource(R.drawable.ic_close),
-                        contentDescription = stringResource(R.string.action_clear_search),
+                        painter = painterResource(
+                            if (columns == 2) R.drawable.ic_list else R.drawable.ic_grid,
+                        ),
+                        contentDescription = stringResource(R.string.action_layout),
                     )
                 }
-            }
-            IconButton(onClick = { onColumnsChange(if (columns == 2) 1 else 2) }) {
-                Icon(
-                    painter = painterResource(
-                        if (columns == 2) R.drawable.ic_list else R.drawable.ic_grid,
-                    ),
-                    contentDescription = stringResource(R.string.action_layout),
-                )
             }
         }
     }

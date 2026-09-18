@@ -31,6 +31,10 @@ Every push to `main` publishes a signed APK per architecture in Releases.
 Amehrug is a fork of [Notally](https://github.com/OmGodse/Notally) by OMGodse,
 released under the GNU General Public License v3.
 
+Icons are Material Symbols Rounded from
+[google/material-design-icons](https://github.com/google/material-design-icons),
+Apache License 2.0.
+
 ## License
 
 GNU General Public License v3.0. See `LICENSE.md`.

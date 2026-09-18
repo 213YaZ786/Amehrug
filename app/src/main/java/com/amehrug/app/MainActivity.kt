@@ -16,20 +16,29 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.PermanentDrawerSheet
+import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
 import androidx.compose.material3.DrawerValue
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -39,6 +48,7 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
@@ -168,65 +178,77 @@ private fun AmehrugRoot(settings: AppSettings) {
 
     BackHandler(enabled = screenName != NOTES) { screenName = NOTES }
 
-    ModalNavigationDrawer(
-        drawerState = drawer,
-        gesturesEnabled = screenName == NOTES,
-        drawerContent = {
-            ModalDrawerSheet {
+    // One number the diagnostic log can be read for, when a bar looks like
+    // it is sitting under the status bar. Zero here means the window is not
+    // handing insets to Compose at all, which is a different bug from a
+    // component that forgets to apply them.
+    val density = LocalDensity.current
+    val safeTop = WindowInsets.safeDrawing.getTop(density)
+    LaunchedEffect(safeTop) {
+        Diagnostics.log.info("insets", "safe drawing top $safeTop px")
+    }
+
+    // The sheet scrolls. Without it, a few labels push Settings and
+    // Diagnostics off the bottom of the screen, where nothing can reach them.
+    val drawerContent: @Composable () -> Unit = {
+        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+            Text(
+                text = stringResource(R.string.app_name),
+                style = MaterialTheme.typography.titleLarge,
+                modifier = Modifier.padding(start = 28.dp, top = 24.dp, bottom = 16.dp),
+            )
+            DrawerRow(R.string.folder_notes, R.drawable.ic_note, folder == Folder.NOTES) {
+                folderName = Folder.NOTES.name
+                labelFilter = ""
+                screenName = NOTES
+                scope.launch { drawer.close() }
+            }
+            DrawerRow(R.string.folder_archive, R.drawable.ic_archive, folder == Folder.ARCHIVED) {
+                folderName = Folder.ARCHIVED.name
+                labelFilter = ""
+                screenName = NOTES
+                scope.launch { drawer.close() }
+            }
+            DrawerRow(R.string.folder_trash, R.drawable.ic_delete, folder == Folder.DELETED) {
+                folderName = Folder.DELETED.name
+                labelFilter = ""
+                screenName = NOTES
+                scope.launch { drawer.close() }
+            }
+            if (labels.isNotEmpty()) {
                 Text(
-                    text = stringResource(R.string.app_name),
-                    style = MaterialTheme.typography.titleLarge,
-                    modifier = Modifier.padding(start = 28.dp, top = 24.dp, bottom = 16.dp),
+                    text = stringResource(R.string.drawer_labels),
+                    style = MaterialTheme.typography.labelLarge,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.padding(start = 28.dp, top = 16.dp, bottom = 4.dp),
                 )
-                DrawerRow(R.string.folder_notes, R.drawable.ic_checklist, folder == Folder.NOTES) {
-                    folderName = Folder.NOTES.name
-                    labelFilter = ""
-                    screenName = NOTES
-                    scope.launch { drawer.close() }
-                }
-                DrawerRow(R.string.folder_archive, R.drawable.ic_archive, folder == Folder.ARCHIVED) {
-                    folderName = Folder.ARCHIVED.name
-                    labelFilter = ""
-                    screenName = NOTES
-                    scope.launch { drawer.close() }
-                }
-                DrawerRow(R.string.folder_trash, R.drawable.ic_delete, folder == Folder.DELETED) {
-                    folderName = Folder.DELETED.name
-                    labelFilter = ""
-                    screenName = NOTES
-                    scope.launch { drawer.close() }
-                }
-                if (labels.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.drawer_labels),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 28.dp, top = 16.dp, bottom = 4.dp),
-                    )
-                    for (label in labels) {
-                        DrawerRow(
-                            label = label,
-                            icon = R.drawable.ic_checklist,
-                            selected = labelFilter == label,
-                        ) {
-                            labelFilter = label
-                            folderName = Folder.NOTES.name
-                            screenName = NOTES
-                            scope.launch { drawer.close() }
-                        }
+                for (label in labels) {
+                    DrawerRow(
+                        label = label,
+                        icon = R.drawable.ic_label,
+                        selected = labelFilter == label,
+                    ) {
+                        labelFilter = label
+                        folderName = Folder.NOTES.name
+                        screenName = NOTES
+                        scope.launch { drawer.close() }
                     }
                 }
-                DrawerRow(R.string.settings_title, R.drawable.ic_settings, screenName == SETTINGS) {
-                    screenName = SETTINGS
-                    scope.launch { drawer.close() }
-                }
-                DrawerRow(R.string.diagnostics_title, R.drawable.ic_more, screenName == DIAGNOSTICS) {
-                    screenName = DIAGNOSTICS
-                    scope.launch { drawer.close() }
-                }
             }
-        },
-    ) {
+            DrawerRow(R.string.settings_title, R.drawable.ic_settings, screenName == SETTINGS) {
+                screenName = SETTINGS
+                scope.launch { drawer.close() }
+            }
+            DrawerRow(R.string.diagnostics_title, R.drawable.ic_bug, screenName == DIAGNOSTICS) {
+                screenName = DIAGNOSTICS
+                scope.launch { drawer.close() }
+            }
+        }
+    }
+
+    // showMenu is false when the drawer is already on screen: a hamburger
+    // that opens what is open makes no sense.
+    val body: @Composable (Boolean) -> Unit = { showMenu ->
         // One spring for every screen change, so opening a note and coming
         // back feel like the same movement played forwards and backwards.
         AnimatedContent(
@@ -253,6 +275,7 @@ private fun AmehrugRoot(settings: AppSettings) {
                     columns = columns,
                     onColumnsChange = { columns = it },
                     onMenu = { scope.launch { drawer.open() } },
+                    showMenu = showMenu,
                     onOpen = { id ->
                         editorId = id
                         editorType = NoteType.NOTE.name
@@ -271,6 +294,29 @@ private fun AmehrugRoot(settings: AppSettings) {
                 )
                 Screen.Settings -> SettingsScreen(settings = settings, onBack = { screenName = NOTES })
                 Screen.Diagnostics -> DiagnosticsScreen(onBack = { screenName = NOTES })
+            }
+        }
+    }
+
+    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+        // A drawer that has to be pulled open every time wastes a tablet.
+        // Past 840dp it stays on screen instead, which is where Material
+        // puts the boundary between a phone layout and an expanded one.
+        if (maxWidth >= 840.dp) {
+            PermanentNavigationDrawer(
+                drawerContent = {
+                    PermanentDrawerSheet(modifier = Modifier.width(300.dp)) { drawerContent() }
+                },
+            ) {
+                body(false)
+            }
+        } else {
+            ModalNavigationDrawer(
+                drawerState = drawer,
+                gesturesEnabled = screenName == NOTES,
+                drawerContent = { ModalDrawerSheet { drawerContent() } },
+            ) {
+                body(true)
             }
         }
     }
