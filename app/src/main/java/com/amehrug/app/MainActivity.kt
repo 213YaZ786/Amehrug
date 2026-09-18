@@ -286,6 +286,17 @@ private fun AmehrugRoot(settings: AppSettings) {
                     onColumnsChange = { columns = it },
                     onMenu = { scope.launch { drawer.open() } },
                     showMenu = showMenu,
+                    dockOrder = settings.dockOrder,
+                    onDockReorder = { order ->
+                        AppGraph.appScope.launch { AppGraph.settings.setDockOrder(order) }
+                    },
+                    onHome = {
+                        folderName = Folder.NOTES.name
+                        labelFilter = ""
+                        query = ""
+                        screenName = NOTES
+                    },
+                    onSettings = { screenName = SETTINGS },
                     onOpen = { id ->
                         editorId = id
                         editorType = NoteType.NOTE.name

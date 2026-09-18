@@ -57,6 +57,7 @@
     <string name="restore_done">Restauré : %1$d notes, %2$d fichiers.</string>
     <string name="restore_failed">Rien n\'a été restauré. Mot de passe incorrect, ou fichier abîmé.</string>
     <string name="action_menu">Ouvrir le menu</string>
+    <string name="action_search">Rechercher</string>
     <string name="action_layout">Changer la disposition</string>
     <string name="action_clear_search">Effacer la recherche</string>
     <string name="action_new_note">Nouvelle note</string>

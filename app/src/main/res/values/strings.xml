@@ -58,6 +58,7 @@
     <string name="restore_done">Restored: %1$d notes, %2$d files.</string>
     <string name="restore_failed">Nothing was restored. Wrong password, or the file is damaged.</string>
     <string name="action_menu">Open the menu</string>
+    <string name="action_search">Search</string>
     <string name="action_layout">Change the layout</string>
     <string name="action_clear_search">Clear the search</string>
     <string name="action_new_note">New note</string>

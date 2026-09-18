@@ -1,24 +1,16 @@
 package com.amehrug.app.ui.notes
 
-import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.core.MutableTransitionState
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
-import androidx.compose.animation.scaleOut
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -33,7 +25,6 @@ import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -49,6 +40,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -58,6 +51,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.amehrug.app.AppGraph
 import com.amehrug.app.R
+import com.amehrug.app.model.DockItem
 import com.amehrug.app.model.Folder
 import com.amehrug.app.model.Note
 import com.amehrug.app.model.NoteType
@@ -82,9 +76,14 @@ fun NotesListScreen(
     onColumnsChange: (Int) -> Unit,
     onMenu: () -> Unit,
     showMenu: Boolean,
+    dockOrder: List<DockItem>,
+    onDockReorder: (List<DockItem>) -> Unit,
+    onHome: () -> Unit,
+    onSettings: () -> Unit,
     onOpen: (Long) -> Unit,
     onCreate: (NoteType) -> Unit,
 ) {
+    val searchFocus = remember { FocusRequester() }
     val repository = AppGraph.notes
     val notes by produceState(
         initialValue = emptyList<Note>(),
@@ -161,41 +160,57 @@ fun NotesListScreen(
                     NotesSearchBar(
                         query = query,
                         onQueryChange = onQueryChange,
-                        columns = columns,
-                        onColumnsChange = onColumnsChange,
                         onMenu = onMenu,
                         showMenu = showMenu,
                         folder = folder,
+                        focusRequester = searchFocus,
                     )
                 }
             },
-            floatingActionButton = {
-                if (folder == Folder.NOTES && selected.isEmpty()) {
-                    CreateButtons(onCreate = onCreate)
-                }
-            },
         ) { insets ->
-            if (notes.isEmpty()) {
-                EmptyState(folder = folder, searching = query.isNotBlank(), modifier = Modifier.padding(insets))
-            } else {
-                LazyVerticalStaggeredGrid(
-                    columns = StaggeredGridCells.Fixed(gridColumns),
-                    state = gridState,
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(
-                        start = 12.dp,
-                        end = 12.dp,
-                        top = insets.calculateTopPadding() + 4.dp,
-                        bottom = insets.calculateBottomPadding() + 96.dp,
-                    ),
-                    verticalItemSpacing = 10.dp,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp),
-                ) {
-                    if (pinned.isNotEmpty() && query.isBlank()) {
-                        item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
-                            SectionLabel(stringResource(R.string.section_pinned))
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (notes.isEmpty()) {
+                    EmptyState(folder = folder, searching = query.isNotBlank(), modifier = Modifier.padding(insets))
+                } else {
+                    LazyVerticalStaggeredGrid(
+                        columns = StaggeredGridCells.Fixed(gridColumns),
+                        state = gridState,
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(
+                            start = 12.dp,
+                            end = 12.dp,
+                            top = insets.calculateTopPadding() + 4.dp,
+                            bottom = insets.calculateBottomPadding() + 120.dp,
+                        ),
+                        verticalItemSpacing = 10.dp,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp),
+                    ) {
+                        if (pinned.isNotEmpty() && query.isBlank()) {
+                            item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
+                                SectionLabel(stringResource(R.string.section_pinned))
+                            }
+                            items(pinned, key = { "pinned-${it.id}" }) { note ->
+                                NoteCard(
+                                    note = note,
+                                    selected = note.id in selected,
+                                    onClick = {
+                                        if (selected.isEmpty()) {
+                                            onOpen(note.id)
+                                        } else {
+                                            selected = toggle(selected, note.id)
+                                        }
+                                    },
+                                    onLongClick = { selected = toggle(selected, note.id) },
+                                    modifier = Modifier.animateItem(),
+                                )
+                            }
+                            if (others.isNotEmpty()) {
+                                item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
+                                    SectionLabel(stringResource(R.string.section_others))
+                                }
+                            }
                         }
-                        items(pinned, key = { "pinned-${it.id}" }) { note ->
+                        items(if (query.isBlank()) others else notes, key = { it.id }) { note ->
                             NoteCard(
                                 note = note,
                                 selected = note.id in selected,
@@ -210,28 +225,28 @@ fun NotesListScreen(
                                 modifier = Modifier.animateItem(),
                             )
                         }
-                        if (others.isNotEmpty()) {
-                            item(span = androidx.compose.foundation.lazy.staggeredgrid.StaggeredGridItemSpan.FullLine) {
-                                SectionLabel(stringResource(R.string.section_others))
-                            }
-                        }
-                    }
-                    items(if (query.isBlank()) others else notes, key = { it.id }) { note ->
-                        NoteCard(
-                            note = note,
-                            selected = note.id in selected,
-                            onClick = {
-                                if (selected.isEmpty()) {
-                                    onOpen(note.id)
-                                } else {
-                                    selected = toggle(selected, note.id)
-                                }
-                            },
-                            onLongClick = { selected = toggle(selected, note.id) },
-                            modifier = Modifier.animateItem(),
-                        )
                     }
                 }
+
+                // The dock floats over the wall, so the grid keeps its
+                // full height and cards pass under the pill.
+                NoteDock(
+                    order = dockOrder,
+                    columns = columns,
+                    selected = if (query.isBlank()) DockItem.HOME else DockItem.SEARCH,
+                    onAction = { item ->
+                        when (item) {
+                            DockItem.HOME -> onHome()
+                            DockItem.SEARCH -> if (selected.isEmpty()) searchFocus.requestFocus()
+                            DockItem.LAYOUT -> onColumnsChange(if (columns == 2) 1 else 2)
+                            DockItem.LIST -> onCreate(NoteType.LIST)
+                            DockItem.NOTE -> onCreate(NoteType.NOTE)
+                            DockItem.SETTINGS -> onSettings()
+                        }
+                    },
+                    onReorder = onDockReorder,
+                    modifier = Modifier.align(Alignment.BottomCenter),
+                )
             }
         }
     }
@@ -271,11 +286,10 @@ private fun toggle(selected: Set<Long>, id: Long): Set<Long> =
 private fun NotesSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
-    columns: Int,
-    onColumnsChange: (Int) -> Unit,
     onMenu: () -> Unit,
     showMenu: Boolean,
     folder: Folder,
+    focusRequester: FocusRequester,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
     Box(
@@ -340,7 +354,7 @@ private fun NotesSearchBar(
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
                         keyboardActions = KeyboardActions(onSearch = { keyboard?.hide() }),
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                     )
                 }
                 if (query.isNotEmpty()) {
@@ -351,45 +365,8 @@ private fun NotesSearchBar(
                         )
                     }
                 }
-                IconButton(onClick = { onColumnsChange(if (columns == 2) 1 else 2) }) {
-                    Icon(
-                        painter = painterResource(
-                            if (columns == 2) R.drawable.ic_list else R.drawable.ic_grid,
-                        ),
-                        contentDescription = stringResource(R.string.action_layout),
-                    )
-                }
+                Spacer(modifier = Modifier.width(4.dp))
             }
-        }
-    }
-}
-
-@Composable
-private fun CreateButtons(onCreate: (NoteType) -> Unit) {
-    val appear = remember { MutableTransitionState(false).apply { targetState = true } }
-    Column(horizontalAlignment = Alignment.End, verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        AnimatedVisibility(
-            visibleState = appear,
-            enter = scaleIn(spring(dampingRatio = 0.55f, stiffness = 380f)) + fadeIn(),
-            exit = scaleOut() + fadeOut(),
-        ) {
-            FloatingActionButton(
-                onClick = { onCreate(NoteType.LIST) },
-                containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-                modifier = Modifier.size(48.dp),
-            ) {
-                Icon(
-                    painter = painterResource(R.drawable.ic_checklist),
-                    contentDescription = stringResource(R.string.action_new_list),
-                )
-            }
-        }
-        FloatingActionButton(onClick = { onCreate(NoteType.NOTE) }) {
-            Icon(
-                painter = painterResource(R.drawable.ic_add),
-                contentDescription = stringResource(R.string.action_new_note),
-            )
         }
     }
 }
