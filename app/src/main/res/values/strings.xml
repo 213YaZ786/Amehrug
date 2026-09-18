@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name" translatable="false">Amehrug</string>
+    <string name="tagline">Private notes. Offline. Yours.</string>
+    <string name="opening">Opening</string>
+    <string name="open_failed">Amehrug cannot open its data on this device.</string>
+
+    <string name="action_back">Back</string>
+    <string name="action_refresh">Refresh</string>
+    <string name="action_copy_all">Copy all</string>
+    <string name="action_save_txt">Save as .txt</string>
+    <string name="action_clear">Clear</string>
+
+    <string name="diagnostics_title">Diagnostics</string>
+    <string name="diagnostics_empty">Nothing logged yet. This log never contains your notes.</string>
+    <string name="diagnostics_copied">Log copied</string>
+    <string name="diagnostics_saved">Log saved</string>
+    <string name="diagnostics_save_failed">Could not save the log</string>
+
+    <string name="settings_title">Settings</string>
+    <string name="settings_lock">Lock the app</string>
+    <string name="settings_lock_summary">Ask for your fingerprint, face or screen lock before showing notes.</string>
+    <string name="settings_lock_unavailable">Set a screen lock on this phone first.</string>
+    <string name="settings_timeout">Lock after leaving the app</string>
+    <string name="settings_lock_now">Lock now</string>
+
+    <string name="lock_locked">Locked</string>
+    <string name="lock_unlock">Unlock</string>
+    <string name="lock_prompt_title">Unlock Amehrug</string>
+    <string name="lock_prompt_description">Your notes stay hidden until you unlock.</string>
+
+    <string name="timeout_immediately">Immediately</string>
+    <plurals name="timeout_seconds">
+        <item quantity="one">%d second</item>
+        <item quantity="other">%d seconds</item>
+    </plurals>
+    <plurals name="timeout_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+    <string name="action_continue">Continue</string>
+    <string name="action_cancel">Cancel</string>
+
+    <string name="settings_backup">Backup</string>
+    <string name="backup_export">Save an encrypted backup</string>
+    <string name="backup_export_summary">One file, sealed with a password you choose. Keep it somewhere safe.</string>
+    <string name="backup_restore">Restore a backup</string>
+    <string name="backup_restore_summary">Adds the notes of a backup. Nothing already here is erased.</string>
+    <string name="backup_working">Working. This takes a moment, the password is deliberately slow to turn into a key.</string>
+    <string name="backup_password">Password</string>
+    <string name="backup_password_again">Password again</string>
+    <string name="backup_password_new">Choose a password. Without it the backup cannot be opened, not even by us.</string>
+    <string name="backup_password_open">Enter the password of this backup.</string>
+    <string name="backup_password_short">At least %d characters.</string>
+    <string name="backup_password_mismatch">The two passwords differ.</string>
+    <string name="backup_done">Backup saved: %1$d notes, %2$d files.</string>
+    <string name="backup_failed">The backup could not be written.</string>
+    <string name="restore_done">Restored: %1$d notes, %2$d files.</string>
+    <string name="restore_failed">Nothing was restored. Wrong password, or the file is damaged.</string>
+</resources>

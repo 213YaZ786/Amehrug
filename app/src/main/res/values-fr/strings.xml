@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="tagline">Notes privées. Hors ligne. À vous.</string>
+    <string name="opening">Ouverture</string>
+    <string name="open_failed">Amehrug ne peut pas ouvrir ses données sur cet appareil.</string>
+
+    <string name="action_back">Retour</string>
+    <string name="action_refresh">Actualiser</string>
+    <string name="action_copy_all">Tout copier</string>
+    <string name="action_save_txt">Enregistrer en .txt</string>
+    <string name="action_clear">Effacer</string>
+
+    <string name="diagnostics_title">Diagnostic</string>
+    <string name="diagnostics_empty">Rien d\'enregistré pour l\'instant. Ce journal ne contient jamais vos notes.</string>
+    <string name="diagnostics_copied">Journal copié</string>
+    <string name="diagnostics_saved">Journal enregistré</string>
+    <string name="diagnostics_save_failed">Impossible d\'enregistrer le journal</string>
+
+    <string name="settings_title">Réglages</string>
+    <string name="settings_lock">Verrouiller l\'application</string>
+    <string name="settings_lock_summary">Demander votre empreinte, votre visage ou le verrouillage de l\'écran avant d\'afficher les notes.</string>
+    <string name="settings_lock_unavailable">Configurez d\'abord un verrouillage d\'écran sur ce téléphone.</string>
+    <string name="settings_timeout">Verrouiller après avoir quitté l\'application</string>
+    <string name="settings_lock_now">Verrouiller maintenant</string>
+
+    <string name="lock_locked">Verrouillé</string>
+    <string name="lock_unlock">Déverrouiller</string>
+    <string name="lock_prompt_title">Déverrouiller Amehrug</string>
+    <string name="lock_prompt_description">Vos notes restent cachées jusqu\'au déverrouillage.</string>
+
+    <string name="timeout_immediately">Immédiatement</string>
+    <plurals name="timeout_seconds">
+        <item quantity="one">%d seconde</item>
+        <item quantity="other">%d secondes</item>
+    </plurals>
+    <plurals name="timeout_minutes">
+        <item quantity="one">%d minute</item>
+        <item quantity="other">%d minutes</item>
+    </plurals>
+    <string name="action_continue">Continuer</string>
+    <string name="action_cancel">Annuler</string>
+
+    <string name="settings_backup">Sauvegarde</string>
+    <string name="backup_export">Enregistrer une sauvegarde chiffrée</string>
+    <string name="backup_export_summary">Un fichier, scellé par un mot de passe que vous choisissez. Gardez-le en lieu sûr.</string>
+    <string name="backup_restore">Restaurer une sauvegarde</string>
+    <string name="backup_restore_summary">Ajoute les notes d\'une sauvegarde. Rien de ce qui est déjà là n\'est effacé.</string>
+    <string name="backup_working">Travail en cours. C\'est un peu long, le mot de passe est volontairement lent à devenir une clé.</string>
+    <string name="backup_password">Mot de passe</string>
+    <string name="backup_password_again">Mot de passe à nouveau</string>
+    <string name="backup_password_new">Choisissez un mot de passe. Sans lui, la sauvegarde ne s\'ouvre pas, pas même par nous.</string>
+    <string name="backup_password_open">Entrez le mot de passe de cette sauvegarde.</string>
+    <string name="backup_password_short">Au moins %d caractères.</string>
+    <string name="backup_password_mismatch">Les deux mots de passe sont différents.</string>
+    <string name="backup_done">Sauvegarde enregistrée : %1$d notes, %2$d fichiers.</string>
+    <string name="backup_failed">La sauvegarde n\'a pas pu être écrite.</string>
+    <string name="restore_done">Restauré : %1$d notes, %2$d fichiers.</string>
+    <string name="restore_failed">Rien n\'a été restauré. Mot de passe incorrect, ou fichier abîmé.</string>
+</resources>
