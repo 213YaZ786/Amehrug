@@ -25,8 +25,6 @@ jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 40
-    env:
-      KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
     steps:
       - name: Checkout
         uses: actions/checkout@v6
@@ -51,19 +49,53 @@ jobs:
           echo "versionName $VERSION"
           echo "VERSION=$VERSION" >> "$GITHUB_ENV"
 
-      # A pull request from a fork or from Dependabot sees no secret, so it
-      # builds unsigned and publishes nothing.
-      - name: Restore the signing key
-        if: ${{ env.KEYSTORE_BASE64 != '' }}
+      # Says out loud which of the four secrets the run can see, by name and
+      # never by value, and restores the key when all four are there. Both
+      # naming schemes are accepted, ANDROID_KEYSTORE_BASE64 and the shorter
+      # KEYSTORE_BASE64, because either is a reasonable thing to have typed.
+      #
+      # A pull request from a fork or from Dependabot sees no secret at all,
+      # which is normal and only means it builds without signing.
+      - name: Check the signing secrets
+        id: signing
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 || secrets.KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || secrets.KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || secrets.KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.KEY_PASSWORD }}
         run: |
+          missing=
+          for name in KEYSTORE_BASE64 KEYSTORE_PASSWORD KEY_ALIAS KEY_PASSWORD
+          do
+            if [ -n "${!name}" ]
+            then
+              echo "$name: present"
+            else
+              echo "$name: MISSING"
+              missing=1
+            fi
+          done
+          if [ -n "$missing" ]
+          then
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/amehrug.jks"
+          if [ ! -s "$RUNNER_TEMP/amehrug.jks" ]
+          then
+            echo "::error::The keystore secret is not valid base64."
+            echo "ready=false" >> "$GITHUB_OUTPUT"
+            exit 1
+          fi
+          echo "keystore restored, $(stat -c%s "$RUNNER_TEMP/amehrug.jks") bytes"
           echo "AMEHRUG_KEYSTORE=$RUNNER_TEMP/amehrug.jks" >> "$GITHUB_ENV"
+          echo "ready=true" >> "$GITHUB_OUTPUT"
 
       - name: Build and test
         env:
-          AMEHRUG_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          AMEHRUG_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          AMEHRUG_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          AMEHRUG_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD || secrets.KEYSTORE_PASSWORD }}
+          AMEHRUG_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS || secrets.KEY_ALIAS }}
+          AMEHRUG_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD || secrets.KEY_PASSWORD }}
         run: ./gradlew --stacktrace assembleDebug assembleRelease testDebugUnitTest
 
       - name: Name the files and note their fingerprints
@@ -109,7 +141,7 @@ jobs:
       # takes the plain tag, the next ones carry the run number, so a release
       # is never overwritten and the history stays readable.
       - name: Publish the release
-        if: ${{ github.event_name != 'pull_request' && env.AMEHRUG_KEYSTORE != '' }}
+        if: ${{ github.event_name != 'pull_request' && steps.signing.outputs.ready == 'true' }}
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
@@ -121,11 +153,20 @@ jobs:
             TITLE="Amehrug $VERSION (build $GITHUB_RUN_NUMBER)"
           fi
           gh release create "$TAG" release/* \
+            --repo "$GITHUB_REPOSITORY" \
             --title "$TITLE" \
             --target "$GITHUB_SHA" \
             --generate-notes
+          echo "published $TAG"
+          gh release view "$TAG" --repo "$GITHUB_REPOSITORY" --json url --jq .url
 
-      - name: Say why nothing was published
-        if: ${{ github.event_name != 'pull_request' && env.AMEHRUG_KEYSTORE == '' }}
+      # Red on purpose. A build that cannot publish used to pass quietly,
+      # which reads as "it worked" while nothing was released.
+      - name: Fail when a push could not be published
+        if: ${{ github.event_name != 'pull_request' && steps.signing.outputs.ready != 'true' }}
         run: |
-          echo "No signing key, so no release. Add the four secrets listed in docs/03-RELEASING.md."
+          echo "::error::No release: the signing secrets are missing or unreadable."
+          echo "Read the Check the signing secrets step above to see which one."
+          echo "Names accepted: ANDROID_KEYSTORE_BASE64 or KEYSTORE_BASE64, and the"
+          echo "matching PASSWORD, ALIAS and KEY_PASSWORD. See docs/03-RELEASING.md."
+          exit 1
