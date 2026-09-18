@@ -3,12 +3,12 @@
 # google/ksp and Kotlin/kotlinx.coroutines. Do not change one from memory.
 [versions]
 agp = "9.4.0"
-kotlin = "2.4.0"
+kotlin = "2.4.20"
 activity = "1.13.0"
 core = "1.19.0"
 compose = "1.12.1"
 material3 = "1.4.0"
-ksp = "2.3.11"
+ksp = "2.3.12"
 room = "2.8.5"
 coroutines = "1.11.0"
 sqlcipher = "4.18.0"
