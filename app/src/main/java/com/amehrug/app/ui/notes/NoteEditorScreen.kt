@@ -8,6 +8,7 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.border
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -17,7 +18,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.defaultMinSize
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -67,6 +68,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.amehrug.app.AppGraph
 import com.amehrug.app.R
@@ -356,37 +358,46 @@ fun NoteEditorScreen(
             }
             AttachmentStrip(attachments = attachments, onRemove = { removeAttachment(it) })
             if (!loaded) Spacer(modifier = Modifier.weight(1f))
-            if (loaded) Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
+            // A box, not a row: the zone runs the full width and the style
+            // buttons float over it, so the band does not stop short of
+            // them the way it did when they sat beside it.
+            if (loaded) Box(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 when (type) {
                     NoteType.NOTE -> EditorZone(
                         color = background,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        modifier = Modifier.fillMaxSize(),
                     ) {
-                        StyledEditorField(
-                            value = body,
-                            spans = spans,
-                            onValueChange = { next ->
-                                if (next.text != body.text) {
-                                    spans = TextSpans.afterEdit(spans, body.text, next.text, pending)
-                                    pending = -1
-                                } else if (next.selection != body.selection) {
-                                    // Moving the cursor drops a style that was
-                                    // asked for and never used.
-                                    pending = -1
-                                }
-                                body = next
-                            },
-                            placeholder = stringResource(R.string.editor_body),
-                            style = MaterialTheme.typography.bodyLarge,
-                            modifier = Modifier
-                                .fillMaxSize()
-                                .verticalScroll(rememberScrollState())
-                                .padding(horizontal = 16.dp, vertical = 12.dp),
-                        )
+                        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
+                            val room = maxHeight - 24.dp
+                            StyledEditorField(
+                                value = body,
+                                spans = spans,
+                                onValueChange = { next ->
+                                    if (next.text != body.text) {
+                                        spans = TextSpans.afterEdit(spans, body.text, next.text, pending)
+                                        pending = -1
+                                    } else if (next.selection != body.selection) {
+                                        // Moving the cursor drops a style that was
+                                        // asked for and never used.
+                                        pending = -1
+                                    }
+                                    body = next
+                                },
+                                placeholder = stringResource(R.string.editor_body),
+                                style = MaterialTheme.typography.bodyLarge,
+                                modifier = Modifier
+                                    .fillMaxSize()
+                                    .verticalScroll(rememberScrollState())
+                                    // Clear of the buttons on the right, so no
+                                    // line of text ever runs under them.
+                                    .padding(start = 16.dp, end = 60.dp, top = 12.dp, bottom = 12.dp),
+                                minHeight = if (room > 0.dp) room else 0.dp,
+                            )
+                        }
                     }
                     NoteType.LIST -> EditorZone(
                         color = background,
-                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                        modifier = Modifier.fillMaxSize(),
                     ) {
                         Checklist(items = items, modifier = Modifier.fillMaxSize())
                     }
@@ -418,6 +429,7 @@ fun NoteEditorScreen(
                         mask
                     }
                     StyleBar(
+                        modifier = Modifier.align(Alignment.BottomEnd),
                         active = activeStyles,
                         onToggle = { kind ->
                             val at = body.selection
@@ -458,6 +470,7 @@ fun NoteEditorScreen(
                         textAlign = TextAlign.Center,
                     ),
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                    minHeight = 40.dp,
                 )
             }
             EditorDock(
@@ -618,10 +631,11 @@ private fun DockButton(action: DockAction, slot: androidx.compose.ui.unit.Dp) {
 private fun StyleBar(
     active: Int,
     onToggle: (NoteStyle) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
     Column(
-        modifier = Modifier.fillMaxHeight().padding(end = 4.dp, bottom = 4.dp),
+        modifier = modifier.padding(end = 8.dp, bottom = 8.dp),
         // At the bottom, next to the thumb and next to everything else that
         // is reached by hand. It rides up with the keyboard because the
         // whole column does.
@@ -630,18 +644,18 @@ private fun StyleBar(
     ) {
         for (kind in STYLE_BUTTONS) {
             val on = active and kind.bit != 0
+            val outline = MaterialTheme.colorScheme.onSurfaceVariant
             Surface(
                 shape = CircleShape,
-                color = if (on) {
-                    MaterialTheme.colorScheme.primary
-                } else {
-                    MaterialTheme.colorScheme.surfaceContainerHighest
-                },
-                contentColor = if (on) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+                // Off, the button is an outline over the note's own colour,
+                // thick enough to be read as a button. On, it is filled with
+                // the palette's primary and cannot be mistaken for off.
+                color = if (on) MaterialTheme.colorScheme.primary else Color.Transparent,
+                contentColor = if (on) MaterialTheme.colorScheme.onPrimary else outline,
+                border = BorderStroke(
+                    width = if (on) 0.dp else 2.dp,
+                    color = if (on) MaterialTheme.colorScheme.primary else outline,
+                ),
                 modifier = Modifier
                     .padding(top = 8.dp)
                     .size(44.dp)
@@ -708,6 +722,7 @@ private fun StyledEditorField(
     placeholder: String,
     style: androidx.compose.ui.text.TextStyle,
     modifier: Modifier = Modifier,
+    minHeight: Dp = 0.dp,
 ) {
     val linkColor = MaterialTheme.colorScheme.primary
     Box(modifier = modifier.fillMaxWidth()) {
@@ -726,7 +741,9 @@ private fun StyledEditorField(
             visualTransformation = remember(spans, linkColor) {
                 SpanTransformation(spans, linkColor)
             },
-            modifier = Modifier.fillMaxWidth(),
+            // Tall enough to cover its zone even when the note is empty,
+            // so writing starts wherever the finger lands.
+            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = minHeight),
         )
     }
 }
@@ -738,6 +755,7 @@ private fun EditorField(
     placeholder: String,
     style: androidx.compose.ui.text.TextStyle,
     modifier: Modifier = Modifier,
+    minHeight: Dp = 0.dp,
 ) {
     Box(modifier = modifier.fillMaxWidth()) {
         if (value.isEmpty()) {
@@ -755,7 +773,12 @@ private fun EditorField(
             onValueChange = onValueChange,
             textStyle = style.copy(color = MaterialTheme.colorScheme.onSurface),
             cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            modifier = Modifier.fillMaxWidth(),
+            // A field is only as tall as its text, so an empty note left
+            // most of its zone dead to the touch and writing meant aiming at
+            // the placeholder. A minimum height makes the whole zone the
+            // field, and a tap anywhere in it lands where it looks like it
+            // should.
+            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = minHeight),
         )
     }
 }
@@ -803,15 +826,17 @@ private fun DateField(
         value = if (editing) text else shown.orEmpty(),
         onValueChange = onTextChange,
         singleLine = true,
-        // Small on purpose. It is the note's date, not its heading.
-        textStyle = MaterialTheme.typography.labelSmall.copy(
+        // The same size as the title. The two read as a pair at the two
+        // ends of the note.
+        textStyle = MaterialTheme.typography.titleLarge.copy(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         ),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
+            .defaultMinSize(minHeight = 40.dp)
             .onFocusChanged { state -> onFocus(state.isFocused) },
     )
 }
