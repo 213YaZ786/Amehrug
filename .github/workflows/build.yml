@@ -111,13 +111,16 @@ jobs:
           ( cd release && sha256sum ./*.apk > SHA256SUMS.txt )
           cat release/SHA256SUMS.txt
 
-      # The only permission allowed is the one AndroidX core declares for
-      # its own non exported receivers. Anything else fails the build.
+      # Two permissions are allowed. USE_BIOMETRIC, which the app lock needs
+      # to show the system unlock prompt, and the one AndroidX core declares
+      # for its own non exported receivers. Anything else fails the build.
       - name: Check release permissions
         run: |
           AAPT2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)aapt2"
           "$AAPT2" dump permissions "release/Amehrug-$VERSION-universal.apk" | tee permissions.txt
-          if grep -E "uses-permission" permissions.txt | grep -v "com.amehrug.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION"
+          if grep -E "uses-permission" permissions.txt \
+            | grep -v "com.amehrug.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" \
+            | grep -v "android.permission.USE_BIOMETRIC"
           then
             echo "Unexpected permission in the release APK"
             exit 1
