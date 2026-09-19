@@ -2,10 +2,11 @@ package com.amehrug.app.ui.notes
 
 import androidx.compose.foundation.gestures.awaitEachGesture
 import androidx.compose.foundation.gestures.awaitFirstDown
-import androidx.compose.foundation.lazy.staggeredgrid.LazyStaggeredGridState
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.PointerInputScope
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.dp
 
 /**
@@ -93,24 +94,56 @@ suspend fun PointerInputScope.detectSelectionGestures(
 }
 
 /**
- * Which note sits under a point, in the coordinate space the grid reports.
+ * Where every visible card is, in the window's own coordinates.
  *
- * Section headers carry a key the mapping below does not recognise, so a
- * finger crossing one selects nothing, which is the wanted behaviour.
+ * The first version of this asked the grid where its items were. Those
+ * offsets leave out the padding the grid keeps at the top for the search
+ * pill, about the height of a card, so every touch landed one card too low
+ * and holding a card selected its neighbour. Rather than add that padding
+ * back and trust a convention that cannot be checked here, each card now
+ * reports the rectangle it actually occupies.
+ *
+ * Positions are kept relative to the window, not to the grid, because a card
+ * and the grid report their own positions at different moments during a
+ * layout pass. Converting the finger once, at the moment it is asked about,
+ * removes that ordering from the picture entirely.
  */
-fun noteAt(state: LazyStaggeredGridState, point: Offset): Long? {
-    for (item in state.layoutInfo.visibleItemsInfo) {
-        val x = point.x - item.offset.x
-        val y = point.y - item.offset.y
-        if (x >= 0f && y >= 0f && x <= item.size.width && y <= item.size.height) {
-            return noteIdOf(item.key)
-        }
-    }
-    return null
-}
+class CardBounds {
+    private val rects = HashMap<Long, Rect>()
 
-private fun noteIdOf(key: Any?): Long? = when (key) {
-    is Long -> key
-    is String -> key.removePrefix("pinned-").toLongOrNull()
-    else -> null
+    /**
+     * The node that reads the gesture. Held here rather than in a state so
+     * that a layout pass never asks for a recomposition just by reporting a
+     * position it has already reported.
+     */
+    var origin: LayoutCoordinates? = null
+
+    fun put(id: Long, coordinates: LayoutCoordinates) {
+        if (!coordinates.isAttached) return
+        // localToRoot is a member of LayoutCoordinates. positionInRoot is an
+        // extension and needs its own import, which is what broke the build.
+        val topLeft = coordinates.localToRoot(Offset.Zero)
+        rects[id] = Rect(
+            left = topLeft.x,
+            top = topLeft.y,
+            right = topLeft.x + coordinates.size.width,
+            bottom = topLeft.y + coordinates.size.height,
+        )
+    }
+
+    /** A card that leaves the screen takes its rectangle with it. */
+    fun forget(id: Long) {
+        rects.remove(id)
+    }
+
+    /** The note under [point], which is given in [origin]'s coordinates. */
+    fun at(point: Offset): Long? {
+        val grid = origin
+        if (grid == null || !grid.isAttached) return null
+        val inRoot = grid.localToRoot(point)
+        for ((id, rect) in rects) {
+            if (rect.contains(inRoot)) return id
+        }
+        return null
+    }
 }

@@ -98,7 +98,17 @@ class MainActivity : ComponentActivity() {
         super.onStop()
         // Before anything else: whatever is being typed reaches the disk.
         AppGraph.flushPendingWrite()
-        AppGraph.lock.onBackground()
+        val leftAt = AppGraph.lock.onBackground()
+        if (leftAt != null) {
+            // appScope, because the activity may be gone before this lands.
+            AppGraph.appScope.launch {
+                try {
+                    AppGraph.settings.setLockLeftAt(leftAt)
+                } catch (e: Exception) {
+                    Diagnostics.log.error("lock", "writing the departure time", e)
+                }
+            }
+        }
     }
 }
 
@@ -115,6 +125,12 @@ private fun AmehrugApp() {
     // Opening the database happens here, off the main thread.
     val state by produceState<SettingsState>(SettingsState.Loading) {
         try {
+            // Read once, then wiped: a window granted by a departure time
+            // is spent the moment it is used, so a process killed while in
+            // front cannot leave an old one lying around to be reused.
+            val restored = AppGraph.settings.lockLeftAt()
+            AppGraph.lock.restore(restored)
+            if (restored != null) AppGraph.settings.setLockLeftAt(null)
             AppGraph.settings.settings.collect { settings ->
                 AppGraph.lock.onSettings(settings)
                 value = SettingsState.Ready(settings)

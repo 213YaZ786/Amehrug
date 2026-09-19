@@ -27,6 +27,8 @@
     <string name="settings_lock_method_none">No fingerprint or face on this phone.</string>
     <string name="settings_timeout">Lock after leaving the app</string>
     <string name="settings_lock_now">Lock now</string>
+    <string name="settings_appearance">Appearance</string>
+    <string name="settings_security">Security</string>
 
     <string name="lock_locked">Locked</string>
     <string name="lock_unlock">Unlock</string>
@@ -149,4 +151,12 @@
     <string name="attachment_remove">Remove</string>
     <string name="attachment_no_player">Playing recordings comes later. The file is kept, encrypted.</string>
     <string name="attachment_failed">That picture could not be added.</string>
+    <string name="action_export">Export</string>
+    <string name="export_title">Export as</string>
+    <string name="export_txt">Plain text (.txt)</string>
+    <string name="export_markdown">Markdown (.md)</string>
+    <string name="export_html">Web page (.html)</string>
+    <string name="export_pdf">PDF (.pdf)</string>
+    <string name="export_done">Exported.</string>
+    <string name="export_failed">That export could not be written.</string>
 </resources>

@@ -36,6 +36,14 @@ object SettingsCodec {
     const val DOCK_ORDER = "dock.order"
     const val NOTE_TIMESTAMP = "notes.timestamp"
 
+    /**
+     * When the app was last put away, on the clock that counts since the
+     * phone booted. It is not part of [AppSettings]: nothing on screen shows
+     * it, and putting it there would make every trip to the background look
+     * like a settings change to everything watching them.
+     */
+    const val LOCK_LEFT_AT = "lock.leftAt"
+
     fun decode(rows: Map<String, String>): AppSettings {
         val defaults = AppSettings()
         val enabled = when (rows[LOCK_ENABLED]) {
@@ -88,6 +96,12 @@ object SettingsCodec {
 
     fun encodeLockTimeout(seconds: Int): Pair<String, String> =
         LOCK_TIMEOUT to (if (seconds in LockPolicy.TIMEOUTS) seconds else AppSettings().lockTimeoutSeconds).toString()
+
+    /** Anything that is not a plain positive number reads as "never". */
+    fun decodeLockLeftAt(raw: String?): Long? = raw?.trim()?.toLongOrNull()?.takeIf { it >= 0L }
+
+    fun encodeLockLeftAt(value: Long?): Pair<String, String> =
+        LOCK_LEFT_AT to (value?.toString() ?: "")
 
     fun encodeDockOrder(order: List<DockItem>): Pair<String, String> =
         DOCK_ORDER to decodeDockOrder(order.joinToString(",") { it.name }).joinToString(",") { it.name }

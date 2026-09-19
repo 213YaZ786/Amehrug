@@ -33,6 +33,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -50,6 +51,7 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onGloballyPositioned
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
@@ -117,6 +119,7 @@ fun NotesListScreen(
     // someone expects after opening a note.
     var selected by remember { mutableStateOf(emptySet<Long>()) }
     var asking by remember { mutableStateOf(Ask.NONE) }
+    var exporting by remember { mutableStateOf(false) }
     val chosen = notes.filter { it.id in selected }
     val ids = chosen.map { it.id }
 
@@ -127,6 +130,10 @@ fun NotesListScreen(
     // restarted on every frame.
     var edge by remember { mutableStateOf(0f) }
     var finger by remember { mutableStateOf(Offset.Zero) }
+    // Where the cards are. Plain objects, not state: they are written during
+    // layout and read during a gesture, and making them observable would
+    // start a layout that writes them again.
+    val cards = remember { CardBounds() }
     val haptics = LocalHapticFeedback.current
     // The gesture block below is created once and outlives recomposition, so
     // it must not hold on to the first callback it was handed.
@@ -181,7 +188,7 @@ fun NotesListScreen(
                     // gesture once here rather than card by card is what
                     // makes the slide possible at all.
                     fun take(point: Offset) {
-                        val id = noteAt(gridState, point) ?: return
+                        val id = cards.at(point) ?: return
                         if (id !in selected) {
                             selected = selected + id
                             haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -194,10 +201,14 @@ fun NotesListScreen(
                         userScrollEnabled = !sweeping,
                         modifier = Modifier
                             .fillMaxSize()
+                            // Right before the gesture reader, with no layout
+                            // modifier between them, so both speak of the
+                            // same coordinates.
+                            .onGloballyPositioned { cards.origin = it }
                             .pointerInput(Unit) {
                                 detectSelectionGestures(
                                     onTap = { point ->
-                                        val id = noteAt(gridState, point)
+                                        val id = cards.at(point)
                                         if (id != null) {
                                             if (selected.isEmpty()) {
                                                 open(id)
@@ -207,7 +218,7 @@ fun NotesListScreen(
                                         }
                                     },
                                     onSweepStart = { point ->
-                                        val id = noteAt(gridState, point)
+                                        val id = cards.at(point)
                                         if (id != null) {
                                             sweeping = true
                                             finger = point
@@ -244,11 +255,16 @@ fun NotesListScreen(
                                 SectionLabel(stringResource(R.string.section_pinned))
                             }
                             items(pinned, key = { "pinned-${it.id}" }) { note ->
+                                DisposableEffect(note.id) {
+                                    onDispose { cards.forget(note.id) }
+                                }
                                 NoteCard(
                                     note = note,
                                     timestamp = timestamp,
                                     selected = note.id in selected,
-                                    modifier = Modifier.animateItem(),
+                                    modifier = Modifier
+                                        .animateItem()
+                                        .onGloballyPositioned { cards.put(note.id, it) },
                                 )
                             }
                             if (others.isNotEmpty()) {
@@ -258,11 +274,16 @@ fun NotesListScreen(
                             }
                         }
                         items(if (query.isBlank()) others else notes, key = { it.id }) { note ->
+                            DisposableEffect(note.id) {
+                                onDispose { cards.forget(note.id) }
+                            }
                             NoteCard(
                                 note = note,
                                 timestamp = timestamp,
                                 selected = note.id in selected,
-                                modifier = Modifier.animateItem(),
+                                modifier = Modifier
+                                    .animateItem()
+                                    .onGloballyPositioned { cards.put(note.id, it) },
                             )
                         }
                     }
@@ -287,6 +308,7 @@ fun NotesListScreen(
                         onTrash = { act { repository.moveToTrash(ids) } },
                         onRestore = { act { repository.restore(ids) } },
                         onDeleteForever = { asking = Ask.DELETE },
+                        onExport = { exporting = true },
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 } else {
@@ -318,7 +340,7 @@ fun NotesListScreen(
         if (edge != 0f) {
             while (true) {
                 gridState.scrollBy(edge * 26f)
-                val id = noteAt(gridState, finger)
+                val id = cards.at(finger)
                 if (id != null && id !in selected) {
                     selected = selected + id
                     haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
@@ -327,6 +349,14 @@ fun NotesListScreen(
             }
         }
     }
+
+    // The selection is read when a format is picked, so it can be cleared
+    // afterwards without the export losing its notes.
+    ExportControl(
+        visible = exporting,
+        notes = { chosen },
+        onDismiss = { exporting = false },
+    )
 
     Dialogs(
         asking = asking,

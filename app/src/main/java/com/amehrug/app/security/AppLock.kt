@@ -27,10 +27,36 @@ class AppLock(private val now: () -> Long = { SystemClock.elapsedRealtime() }) {
 
     private var leftAt: Long? = null
 
-    /** Called once the settings are known, and on every change. */
+    private var decided = false
+
+    /**
+     * The departure time read back from disk, handed over before the first
+     * settings arrive. Called more than once it does nothing, so a screen
+     * that comes and goes cannot hand the app a second free window.
+     */
+    fun restore(storedLeftAt: Long?) {
+        if (decided) return
+        if (leftAt == null) leftAt = storedLeftAt
+    }
+
+    /**
+     * Called once the settings are known, and on every change.
+     *
+     * The first call of a process is the one that decides. Until it lands
+     * nothing is known about the timeout, so the app stays locked, which is
+     * why it starts that way. Later calls never unlock: a colour changed in
+     * the settings must not open a locked app.
+     */
     fun onSettings(settings: AppSettings) {
         this.settings = settings
-        if (!settings.lockEnabled) lockedState.value = false
+        if (!settings.lockEnabled) {
+            lockedState.value = false
+            return
+        }
+        if (!decided) {
+            decided = true
+            if (!LockPolicy.shouldLock(settings, leftAt, now())) lockedState.value = false
+        }
     }
 
     fun onForeground() {
@@ -38,8 +64,11 @@ class AppLock(private val now: () -> Long = { SystemClock.elapsedRealtime() }) {
         if (LockPolicy.shouldLock(current, leftAt, now())) lockedState.value = true
     }
 
-    fun onBackground() {
-        leftAt = now()
+    /** @return the time to write down, or null when there is nothing to keep. */
+    fun onBackground(): Long? {
+        val at = now()
+        leftAt = at
+        return if (settings?.lockEnabled == true) at else null
     }
 
     fun unlock() {
@@ -48,7 +77,10 @@ class AppLock(private val now: () -> Long = { SystemClock.elapsedRealtime() }) {
     }
 
     fun lockNow() {
-        if (settings?.lockEnabled == true) lockedState.value = true
+        if (settings?.lockEnabled == true) {
+            lockedState.value = true
+            leftAt = null
+        }
     }
 
     companion object {

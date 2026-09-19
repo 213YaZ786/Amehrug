@@ -1,4 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <color name="ic_launcher_background">#1F3D30</color>
+    <!-- The launcher background follows the wallpaper palette.
+         system_* colours are framework resources from API 31, and minSdk
+         is 31, so the alias always resolves. -->
+    <color name="ic_launcher_background">@android:color/system_accent1_100</color>
 </resources>

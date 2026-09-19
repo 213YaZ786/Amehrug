@@ -11,11 +11,15 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.horizontalScroll
@@ -31,8 +35,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -111,6 +113,7 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
     var type by remember(noteId) { mutableStateOf(newType) }
     val items = remember(noteId) { mutableListOf<ListItem>().toMutableStateList() }
     var showColors by remember { mutableStateOf(false) }
+    var showExport by remember { mutableStateOf(false) }
     val attachments = remember(noteId) { mutableListOf<Attachment>().toMutableStateList() }
     // The identifier the note ends up with. A picture cannot be attached to
     // a note that does not exist yet, so adding one saves it first.
@@ -273,97 +276,19 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         containerColor = background,
-        topBar = {
-            TopAppBar(
-                title = {},
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
-                navigationIcon = {
-                    IconButton(onClick = { leave() }) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_back),
-                            contentDescription = stringResource(R.string.action_back),
-                        )
-                    }
-                },
-                actions = {
-                    IconButton(onClick = { pinned = !pinned }) {
-                        Icon(
-                            painter = painterResource(
-                                if (pinned) R.drawable.ic_pin else R.drawable.ic_pin_off,
-                            ),
-                            contentDescription = stringResource(R.string.action_pin),
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            picker.launch(
-                                PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
-                            )
-                        },
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_add),
-                            contentDescription = stringResource(R.string.attachment_add),
-                        )
-                    }
-                    IconButton(onClick = { showColors = !showColors }) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_palette),
-                            contentDescription = stringResource(R.string.action_color),
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            val note = current.value
-                            AppGraph.appScope.launch {
-                                store(note)
-                                if (savedId > 0) repository.archive(listOf(savedId))
-                            }
-                            onClose()
-                        },
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_archive),
-                            contentDescription = stringResource(R.string.action_archive),
-                        )
-                    }
-                    IconButton(
-                        onClick = {
-                            val note = current.value
-                            AppGraph.appScope.launch {
-                                store(note)
-                                if (savedId > 0) repository.moveToTrash(listOf(savedId))
-                            }
-                            onClose()
-                        },
-                    ) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_delete),
-                            contentDescription = stringResource(R.string.action_delete),
-                        )
-                    }
-                },
-            )
-        },
+        // safeDrawing so the keyboard counts as an edge. Everything that is
+        // reached by hand lives at the bottom of this screen, so it has to
+        // ride above the keyboard rather than under it.
+        contentWindowInsets = WindowInsets.safeDrawing,
     ) { insets ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(insets),
         ) {
-            if (showColors) {
-                ColorRow(selected = color, onSelect = { color = it })
-            }
-            EditorField(
-                value = title,
-                onValueChange = { title = it },
-                placeholder = stringResource(R.string.editor_title),
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp),
-            )
             AttachmentStrip(attachments = attachments, onRemove = { removeAttachment(it) })
-            if (!loaded) return@Column
-            when (type) {
+            if (!loaded) Spacer(modifier = Modifier.weight(1f))
+            if (loaded) when (type) {
                 NoteType.NOTE -> {
                     StyledEditorField(
                         value = body,
@@ -429,6 +354,159 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
                     )
                 }
                 NoteType.LIST -> Checklist(items = items, modifier = Modifier.weight(1f))
+            }
+
+            // Everything below here is within reach of one thumb, which is
+            // the point of the layout: the colours, the title and the
+            // actions all sit under the text rather than above it.
+            if (showColors) {
+                ColorRow(selected = color, onSelect = { color = it })
+            }
+            EditorField(
+                value = title,
+                onValueChange = { title = it },
+                placeholder = stringResource(R.string.editor_title),
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
+            )
+            EditorDock(
+                pinned = pinned,
+                colorsOpen = showColors,
+                onBack = { leave() },
+                onPin = { pinned = !pinned },
+                onImage = {
+                    picker.launch(
+                        PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly),
+                    )
+                },
+                onExport = { showExport = true },
+                onColors = { showColors = !showColors },
+                onArchive = {
+                    val note = current.value
+                    AppGraph.appScope.launch {
+                        store(note)
+                        if (savedId > 0) repository.archive(listOf(savedId))
+                    }
+                    onClose()
+                },
+                onTrash = {
+                    val note = current.value
+                    AppGraph.appScope.launch {
+                        store(note)
+                        if (savedId > 0) repository.moveToTrash(listOf(savedId))
+                    }
+                    onClose()
+                },
+            )
+        }
+    }
+
+    // The note as it stands, saved or not. Exporting what is on screen is
+    // what someone means by exporting this note.
+    ExportControl(
+        visible = showExport,
+        notes = { listOf(current.value) },
+        onDismiss = { showExport = false },
+    )
+}
+
+/**
+ * The actions, in one pill at the bottom, the same shape as the dock on the
+ * wall of notes.
+ *
+ * They used to be a row of icons in the top bar, which on a tall phone is
+ * the one place a thumb cannot reach. Buttons shrink rather than overflow
+ * when there are more of them than a narrow screen has room for, the same
+ * rule the selection pill follows.
+ */
+@Composable
+private fun EditorDock(
+    pinned: Boolean,
+    colorsOpen: Boolean,
+    onBack: () -> Unit,
+    onPin: () -> Unit,
+    onImage: () -> Unit,
+    onExport: () -> Unit,
+    onColors: () -> Unit,
+    onArchive: () -> Unit,
+    onTrash: () -> Unit,
+) {
+    val actions = listOf(
+        DockAction(R.drawable.ic_back, R.string.action_back, false, onBack),
+        DockAction(
+            if (pinned) R.drawable.ic_pin else R.drawable.ic_pin_off,
+            R.string.action_pin,
+            pinned,
+            onPin,
+        ),
+        DockAction(R.drawable.ic_add, R.string.attachment_add, false, onImage),
+        DockAction(R.drawable.ic_palette, R.string.action_color, colorsOpen, onColors),
+        DockAction(R.drawable.ic_export, R.string.action_export, false, onExport),
+        DockAction(R.drawable.ic_archive, R.string.action_archive, false, onArchive),
+        DockAction(R.drawable.ic_delete, R.string.action_delete, false, onTrash),
+    )
+    BoxWithConstraints(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 10.dp),
+        contentAlignment = Alignment.BottomCenter,
+    ) {
+        val slot = ((maxWidth - 36.dp) / actions.size).coerceIn(38.dp, 50.dp)
+        Surface(
+            shape = CircleShape,
+            color = MaterialTheme.colorScheme.surfaceContainerHigh,
+            contentColor = MaterialTheme.colorScheme.onSurface,
+            tonalElevation = 3.dp,
+            shadowElevation = 3.dp,
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                for (action in actions) {
+                    DockButton(action, slot)
+                }
+            }
+        }
+    }
+}
+
+private data class DockAction(
+    val icon: Int,
+    val label: Int,
+    val on: Boolean,
+    val onClick: () -> Unit,
+)
+
+@Composable
+private fun DockButton(action: DockAction, slot: androidx.compose.ui.unit.Dp) {
+    val haptics = LocalHapticFeedback.current
+    Box(
+        modifier = Modifier.size(slot),
+        contentAlignment = Alignment.Center,
+    ) {
+        Surface(
+            shape = CircleShape,
+            color = if (action.on) {
+                MaterialTheme.colorScheme.secondaryContainer
+            } else {
+                Color.Transparent
+            },
+            contentColor = if (action.on) {
+                MaterialTheme.colorScheme.onSecondaryContainer
+            } else {
+                MaterialTheme.colorScheme.onSurfaceVariant
+            },
+            modifier = Modifier
+                .size(slot - 4.dp)
+                .clickable {
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    action.onClick()
+                },
+        ) {
+            Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                Icon(
+                    painter = painterResource(action.icon),
+                    contentDescription = stringResource(action.label),
+                )
             }
         }
     }
