@@ -138,7 +138,10 @@ private fun AmehrugApp() {
         SettingsState.Failed -> MessageScreen(stringResource(R.string.open_failed))
         is SettingsState.Ready ->
             if (locked) {
-                LockScreen(onUnlocked = { AppGraph.lock.unlock() })
+                LockScreen(
+                    method = current.settings.lockMethod,
+                    onUnlocked = { AppGraph.lock.unlock() },
+                )
             } else {
                 AmehrugRoot(current.settings)
             }

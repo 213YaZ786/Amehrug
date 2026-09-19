@@ -4,6 +4,7 @@ import android.app.KeyguardManager
 import android.content.Context
 import android.hardware.biometrics.BiometricManager
 import android.os.SystemClock
+import com.amehrug.app.diagnostics.Diagnostics
 import com.amehrug.app.model.AppSettings
 import com.amehrug.app.model.LockPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -51,14 +52,31 @@ class AppLock(private val now: () -> Long = { SystemClock.elapsedRealtime() }) {
     }
 
     companion object {
-        /** The lock is only offered when the phone itself has a screen lock. */
+        /**
+         * The lock is only offered when the phone itself has a screen lock.
+         * This asks the keyguard alone, which needs no permission and cannot
+         * throw, so opening the settings is never at the mercy of the
+         * biometric service.
+         */
         fun available(context: Context): Boolean {
             val keyguard = context.getSystemService(KeyguardManager::class.java) ?: return false
-            if (!keyguard.isDeviceSecure) return false
-            val biometrics = context.getSystemService(BiometricManager::class.java) ?: return false
-            val allowed = BiometricManager.Authenticators.BIOMETRIC_STRONG or
-                BiometricManager.Authenticators.DEVICE_CREDENTIAL
-            return biometrics.canAuthenticate(allowed) == BiometricManager.BIOMETRIC_SUCCESS
+            return keyguard.isDeviceSecure
+        }
+
+        /**
+         * Whether a fingerprint or a face is enrolled. Reading this needs
+         * USE_BIOMETRIC and talks to another process, and it was a crash on
+         * the settings screen once, so every failure is logged and read as
+         * "no biometrics" instead of taking the app down.
+         */
+        fun biometricsAvailable(context: Context): Boolean = try {
+            val biometrics = context.getSystemService(BiometricManager::class.java)
+            biometrics != null &&
+                biometrics.canAuthenticate(BiometricManager.Authenticators.BIOMETRIC_STRONG) ==
+                BiometricManager.BIOMETRIC_SUCCESS
+        } catch (e: Exception) {
+            Diagnostics.log.error("lock", "asking for biometrics", e)
+            false
         }
     }
 }

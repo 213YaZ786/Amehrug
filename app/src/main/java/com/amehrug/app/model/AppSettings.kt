@@ -7,9 +7,18 @@ package com.amehrug.app.model
  */
 enum class DockItem { HOME, SEARCH, LAYOUT, LIST, NOTE, SETTINGS }
 
+/**
+ * How the system is asked to confirm it is you. BIOMETRIC offers the
+ * fingerprint or the face and still accepts the screen code, CODE asks for
+ * the screen code alone. Both are the system prompt: Amehrug never sees and
+ * never stores a code.
+ */
+enum class LockMethod { BIOMETRIC, CODE }
+
 /** Everything the user can change. Stored inside the encrypted database. */
 data class AppSettings(
     val lockEnabled: Boolean = false,
+    val lockMethod: LockMethod = LockMethod.BIOMETRIC,
     val lockTimeoutSeconds: Int = 60,
     val dockOrder: List<DockItem> = DockItem.entries.toList(),
 )
@@ -21,6 +30,7 @@ data class AppSettings(
  */
 object SettingsCodec {
     const val LOCK_ENABLED = "lock.enabled"
+    const val LOCK_METHOD = "lock.method"
     const val LOCK_TIMEOUT = "lock.timeoutSeconds"
     const val DOCK_ORDER = "dock.order"
 
@@ -36,6 +46,7 @@ object SettingsCodec {
             ?: defaults.lockTimeoutSeconds
         return AppSettings(
             lockEnabled = enabled,
+            lockMethod = decodeLockMethod(rows[LOCK_METHOD]),
             lockTimeoutSeconds = timeout,
             dockOrder = decodeDockOrder(rows[DOCK_ORDER]),
         )
@@ -57,6 +68,12 @@ object SettingsCodec {
         out.addAll(DockItem.entries)
         return out.toList()
     }
+
+    /** An unknown or damaged name falls back to the default method. */
+    fun decodeLockMethod(raw: String?): LockMethod =
+        LockMethod.entries.firstOrNull { it.name == raw?.trim() } ?: AppSettings().lockMethod
+
+    fun encodeLockMethod(method: LockMethod): Pair<String, String> = LOCK_METHOD to method.name
 
     fun encodeLockEnabled(enabled: Boolean): Pair<String, String> = LOCK_ENABLED to enabled.toString()
 

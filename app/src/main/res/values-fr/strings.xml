@@ -21,11 +21,16 @@
     <string name="settings_lock_summary">Demander votre empreinte, votre visage ou le verrouillage de l\'écran avant d\'afficher les notes.</string>
     <string name="settings_lock_unavailable">Configurez d\'abord un verrouillage d\'écran sur ce téléphone.</string>
     <string name="settings_timeout">Verrouiller après avoir quitté l\'application</string>
+    <string name="settings_lock_method">Déverrouiller avec</string>
+    <string name="settings_lock_method_biometric">Empreinte ou visage</string>
+    <string name="settings_lock_method_code">Code de l\'écran</string>
+    <string name="settings_lock_method_none">Aucune empreinte ni visage sur ce téléphone.</string>
     <string name="settings_lock_now">Verrouiller maintenant</string>
 
     <string name="lock_locked">Verrouillé</string>
     <string name="lock_unlock">Déverrouiller</string>
     <string name="lock_prompt_title">Déverrouiller Amehrug</string>
+    <string name="lock_unavailable">Le déverrouillage est indisponible pour le moment.</string>
     <string name="lock_prompt_description">Vos notes restent cachées jusqu\'au déverrouillage.</string>
 
     <string name="timeout_immediately">Immédiatement</string>

@@ -22,6 +22,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.amehrug.app.R
+import com.amehrug.app.model.LockMethod
 import com.amehrug.app.security.BiometricGate
 
 /**
@@ -29,7 +30,7 @@ import com.amehrug.app.security.BiometricGate
  * nothing else: no note, no count, no preview.
  */
 @Composable
-fun LockScreen(onUnlocked: () -> Unit) {
+fun LockScreen(method: LockMethod, onUnlocked: () -> Unit) {
     val context = LocalContext.current
     val activity = context as? Activity
     var message by remember { mutableStateOf<CharSequence?>(null) }
@@ -41,6 +42,7 @@ fun LockScreen(onUnlocked: () -> Unit) {
         asking = true
         BiometricGate.authenticate(
             activity = host,
+            method = method,
             onSuccess = {
                 asking = false
                 onUnlocked()

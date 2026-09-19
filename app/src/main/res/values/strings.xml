@@ -21,12 +21,17 @@
     <string name="settings_lock">Lock the app</string>
     <string name="settings_lock_summary">Ask for your fingerprint, face or screen lock before showing notes.</string>
     <string name="settings_lock_unavailable">Set a screen lock on this phone first.</string>
+    <string name="settings_lock_method">Unlock with</string>
+    <string name="settings_lock_method_biometric">Fingerprint or face</string>
+    <string name="settings_lock_method_code">Screen code</string>
+    <string name="settings_lock_method_none">No fingerprint or face on this phone.</string>
     <string name="settings_timeout">Lock after leaving the app</string>
     <string name="settings_lock_now">Lock now</string>
 
     <string name="lock_locked">Locked</string>
     <string name="lock_unlock">Unlock</string>
     <string name="lock_prompt_title">Unlock Amehrug</string>
+    <string name="lock_unavailable">Unlock is unavailable right now.</string>
     <string name="lock_prompt_description">Your notes stay hidden until you unlock.</string>
 
     <string name="timeout_immediately">Immediately</string>

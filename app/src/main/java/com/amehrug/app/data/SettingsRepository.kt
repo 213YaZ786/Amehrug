@@ -4,6 +4,7 @@ import com.amehrug.app.data.db.AmehrugDatabase
 import com.amehrug.app.data.db.SettingEntity
 import com.amehrug.app.model.AppSettings
 import com.amehrug.app.model.DockItem
+import com.amehrug.app.model.LockMethod
 import com.amehrug.app.model.SettingsCodec
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -17,6 +18,8 @@ class SettingsRepository(database: AmehrugDatabase) {
     suspend fun current(): AppSettings = decode(dao.all())
 
     suspend fun setLockEnabled(enabled: Boolean) = put(SettingsCodec.encodeLockEnabled(enabled))
+
+    suspend fun setLockMethod(method: LockMethod) = put(SettingsCodec.encodeLockMethod(method))
 
     suspend fun setLockTimeout(seconds: Int) = put(SettingsCodec.encodeLockTimeout(seconds))
 

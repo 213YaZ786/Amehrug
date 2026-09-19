@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import com.amehrug.app.AppGraph
 import com.amehrug.app.R
 import com.amehrug.app.model.AppSettings
+import com.amehrug.app.model.LockMethod
 import com.amehrug.app.model.LockPolicy
 import com.amehrug.app.security.AppLock
 import kotlinx.coroutines.launch
@@ -44,6 +45,7 @@ fun SettingsScreen(settings: AppSettings, onBack: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val canLock = remember { AppLock.available(context) }
+    val canUseBiometrics = remember { AppLock.biometricsAvailable(context) }
     val repository = AppGraph.settings
 
     Scaffold(
@@ -83,6 +85,35 @@ fun SettingsScreen(settings: AppSettings, onBack: () -> Unit) {
                         scope.launch { repository.setLockEnabled(enabled) }
                     },
                 )
+            }
+            Text(
+                text = stringResource(R.string.settings_lock_method),
+                style = MaterialTheme.typography.titleSmall,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(start = 16.dp, top = 16.dp, end = 16.dp),
+            )
+            for (method in LockMethod.entries) {
+                // The biometric row is offered only when a fingerprint or a
+                // face is enrolled. The code row always works, since the lock
+                // itself is only offered when the phone has a screen lock.
+                val usable = settings.lockEnabled &&
+                    (method == LockMethod.CODE || canUseBiometrics)
+                SettingRow(
+                    title = lockMethodLabel(method),
+                    subtitle = if (method == LockMethod.BIOMETRIC && !canUseBiometrics) {
+                        stringResource(R.string.settings_lock_method_none)
+                    } else {
+                        null
+                    },
+                    enabled = usable,
+                    onClick = { scope.launch { repository.setLockMethod(method) } },
+                ) {
+                    RadioButton(
+                        selected = settings.lockMethod == method,
+                        enabled = usable,
+                        onClick = { scope.launch { repository.setLockMethod(method) } },
+                    )
+                }
             }
             HorizontalDivider()
             Text(
@@ -125,6 +156,12 @@ fun SettingsScreen(settings: AppSettings, onBack: () -> Unit) {
             }
         }
     }
+}
+
+@Composable
+private fun lockMethodLabel(method: LockMethod): String = when (method) {
+    LockMethod.BIOMETRIC -> stringResource(R.string.settings_lock_method_biometric)
+    LockMethod.CODE -> stringResource(R.string.settings_lock_method_code)
 }
 
 @Composable
