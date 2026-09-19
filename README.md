@@ -17,14 +17,9 @@ Private notes for Android.
 - No permission at all. 
 - Bold, italic, monospace and strikethrough, applied to a selection or armed
   before typing. Styles from an imported Notally note are kept.
-- Export to TXT, Markdown, HTML or PDF, from an open note or from a selection
-  on the wall. The file goes wherever the system picker is pointed, which
-  needs no permission.
-
-## Not yet
-
-- The home screen widget.
-- Automatic backup on a schedule. Backups are manual for now.
+- Export to TXT or Markdown, from an open note or from a selection on the
+  wall. The file goes wherever the system picker is pointed, which needs no
+  permission. Neither format carries the pictures attached to a note.
 
 ## Encryption
 
@@ -55,8 +50,9 @@ file somewhere you control.
 ## Build
 
 Android Studio, or `./gradlew assembleDebug`. Requires JDK 21.
-Every push to `main` builds debug and release and publishes a signed APK per
-architecture.
+`./gradlew testDebugUnitTest` runs the unit tests, which need no device.
+Every push to `main` builds debug and release, runs those tests, and
+publishes a signed APK per architecture.
 
 ## Credits
 

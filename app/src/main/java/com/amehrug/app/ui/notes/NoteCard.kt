@@ -27,7 +27,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.pluralStringResource
 import androidx.compose.ui.res.stringResource
@@ -36,17 +35,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.amehrug.app.R
-import com.amehrug.app.model.AgoUnit
 import com.amehrug.app.model.AttachmentKind
 import com.amehrug.app.model.Note
 import com.amehrug.app.model.NoteTimestamp
-import com.amehrug.app.model.NoteTimestamps
 import com.amehrug.app.model.NoteType
-import com.amehrug.app.model.Stamp
 import com.amehrug.app.ui.theme.noteContainerColor
 import com.amehrug.app.ui.theme.noteContentColor
 import com.amehrug.app.ui.theme.noteOutlineColor
-import java.time.ZoneId
 import kotlinx.coroutines.launch
 
 private const val PREVIEW_LINES = 8
@@ -181,42 +176,14 @@ fun NoteCard(
  */
 @Composable
 private fun NoteStamp(at: Long, format: NoteTimestamp) {
-    // Read through the context rather than LocalConfiguration, which has
-    // been moving around in recent Compose releases.
-    val locale = LocalContext.current.resources.configuration.locales[0]
-    val text = when (
-        val stamp = NoteTimestamps.format(
-            format = format,
-            at = at,
-            now = System.currentTimeMillis(),
-            zone = ZoneId.systemDefault(),
-            locale = locale,
-        )
-    ) {
-        Stamp.None -> null
-        Stamp.JustNow -> stringResource(R.string.stamp_just_now)
-        is Stamp.Text -> stamp.value
-        is Stamp.Ago -> pluralStringResource(
-            when (stamp.unit) {
-                AgoUnit.MINUTES -> R.plurals.stamp_minutes
-                AgoUnit.HOURS -> R.plurals.stamp_hours
-                AgoUnit.DAYS -> R.plurals.stamp_days
-                AgoUnit.MONTHS -> R.plurals.stamp_months
-                AgoUnit.YEARS -> R.plurals.stamp_years
-            },
-            stamp.count,
-            stamp.count,
-        )
-    }
-    if (text != null) {
-        Text(
-            text = text,
-            style = MaterialTheme.typography.labelSmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            maxLines = 1,
-            overflow = TextOverflow.Ellipsis,
-        )
-    }
+    val text = stampText(at = at, format = format) ?: return
+    Text(
+        text = text,
+        style = MaterialTheme.typography.labelSmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+    )
 }
 
 @Composable

@@ -14,8 +14,8 @@ android {
         applicationId = "com.amehrug.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 35
-        versionName = "0.20.1"
+        versionCode = 38
+        versionName = "0.21.1"
     }
 
     // Signing comes from the environment, so no key and no password is ever
@@ -122,6 +122,12 @@ dependencies {
     implementation(libs.room.ktx)
     ksp(libs.room.compiler)
     implementation(libs.kotlinx.coroutines.android)
+
+    // Unit tests run on the JVM, with no device and no emulator. Only the
+    // pure Kotlin of the app is covered: parsers, formatters, the span
+    // algebra, the lock arithmetic. Anything holding an Android type is not
+    // tested here and says so.
+    testImplementation(libs.kotlin.test.junit)
 
     // Versions and the pairing with androidx.sqlite come from the SQLCipher
     // for Android README, read on 2026-09-17.

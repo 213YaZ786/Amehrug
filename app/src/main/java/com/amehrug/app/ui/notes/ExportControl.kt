@@ -24,7 +24,6 @@ import androidx.compose.ui.unit.dp
 import com.amehrug.app.AppGraph
 import com.amehrug.app.R
 import com.amehrug.app.diagnostics.Diagnostics
-import com.amehrug.app.export.PdfExport
 import com.amehrug.app.model.ExportFormat
 import com.amehrug.app.model.Note
 import com.amehrug.app.model.NoteExport
@@ -40,8 +39,8 @@ import kotlinx.coroutines.withContext
  *
  * The file is created through the system picker, so nothing leaves the app
  * unless the person points at a place to put it, and no permission is
- * needed. Four launchers rather than one, because the type of file a picker
- * creates is fixed when the launcher is built.
+ * needed. One launcher per format rather than one for all, because the type
+ * of file a picker creates is fixed when the launcher is built.
  *
  * The notes are read at the moment a format is chosen, not when the write
  * lands, so a note edited while the picker is open exports as it was.
@@ -65,18 +64,19 @@ fun ExportControl(visible: Boolean, notes: () -> List<Note>, onDismiss: () -> Un
                     val stream = app.contentResolver.openOutputStream(target)
                         ?: error("no stream for $target")
                     stream.use { out ->
-                        when (work.first) {
-                            ExportFormat.PDF -> PdfExport.write(work.second, out)
-                            ExportFormat.TXT ->
-                                out.write(NoteExport.text(work.second).toByteArray())
-                            ExportFormat.MARKDOWN ->
-                                out.write(NoteExport.markdown(work.second).toByteArray())
-                            ExportFormat.HTML ->
-                                out.write(NoteExport.html(work.second).toByteArray())
+                        val body = when (work.first) {
+                            ExportFormat.TXT -> NoteExport.text(work.second)
+                            ExportFormat.MARKDOWN -> NoteExport.markdown(work.second)
                         }
+                        out.write(body.toByteArray())
                     }
                 }
-                Toast.makeText(app, R.string.export_done, Toast.LENGTH_SHORT).show()
+                // A Toast has to be built on a thread with a looper. This
+                // one runs on appScope, which is Dispatchers.Default, and
+                // building it there threw and took the app down.
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(app, R.string.export_done, Toast.LENGTH_SHORT).show()
+                }
             } catch (cancel: CancellationException) {
                 // CancellationException is an Exception. Caught below it
                 // would be reported as a failure and would break the
@@ -84,7 +84,9 @@ fun ExportControl(visible: Boolean, notes: () -> List<Note>, onDismiss: () -> Un
                 throw cancel
             } catch (e: Exception) {
                 Diagnostics.log.error("export", "writing an export", e)
-                Toast.makeText(app, R.string.export_failed, Toast.LENGTH_LONG).show()
+                withContext(Dispatchers.Main) {
+                    Toast.makeText(app, R.string.export_failed, Toast.LENGTH_LONG).show()
+                }
             }
         }
     }
@@ -95,14 +97,6 @@ fun ExportControl(visible: Boolean, notes: () -> List<Note>, onDismiss: () -> Un
 
     val markdown = rememberLauncherForActivityResult(
         ActivityResultContracts.CreateDocument(ExportFormat.MARKDOWN.mimeType),
-    ) { uri -> if (uri != null) write(uri) else chosen = null }
-
-    val html = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument(ExportFormat.HTML.mimeType),
-    ) { uri -> if (uri != null) write(uri) else chosen = null }
-
-    val pdf = rememberLauncherForActivityResult(
-        ActivityResultContracts.CreateDocument(ExportFormat.PDF.mimeType),
     ) { uri -> if (uri != null) write(uri) else chosen = null }
 
     if (!visible) return
@@ -131,8 +125,6 @@ fun ExportControl(visible: Boolean, notes: () -> List<Note>, onDismiss: () -> Un
                                 when (format) {
                                     ExportFormat.TXT -> txt.launch(name)
                                     ExportFormat.MARKDOWN -> markdown.launch(name)
-                                    ExportFormat.HTML -> html.launch(name)
-                                    ExportFormat.PDF -> pdf.launch(name)
                                 }
                             }
                             .padding(vertical = 14.dp),
@@ -146,6 +138,4 @@ fun ExportControl(visible: Boolean, notes: () -> List<Note>, onDismiss: () -> Un
 private fun formatLabel(format: ExportFormat): Int = when (format) {
     ExportFormat.TXT -> R.string.export_txt
     ExportFormat.MARKDOWN -> R.string.export_markdown
-    ExportFormat.HTML -> R.string.export_html
-    ExportFormat.PDF -> R.string.export_pdf
 }

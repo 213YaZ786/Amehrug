@@ -331,6 +331,7 @@ private fun AmehrugRoot(settings: AppSettings) {
                 is Screen.Editor -> NoteEditorScreen(
                     noteId = current.noteId,
                     newType = current.type,
+                    timestamp = settings.noteTimestamp,
                     onClose = { screenName = NOTES },
                 )
                 Screen.Settings -> SettingsScreen(settings = settings, onBack = { screenName = NOTES })

@@ -155,8 +155,6 @@
     <string name="export_title">Export as</string>
     <string name="export_txt">Plain text (.txt)</string>
     <string name="export_markdown">Markdown (.md)</string>
-    <string name="export_html">Web page (.html)</string>
-    <string name="export_pdf">PDF (.pdf)</string>
     <string name="export_done">Exported.</string>
     <string name="export_failed">That export could not be written.</string>
 </resources>

@@ -16,6 +16,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -50,6 +51,7 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -60,6 +62,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.amehrug.app.AppGraph
@@ -71,11 +74,14 @@ import com.amehrug.app.model.ListItem
 import com.amehrug.app.model.Note
 import com.amehrug.app.model.NoteColor
 import com.amehrug.app.model.NoteStyle
+import com.amehrug.app.model.NoteTimestamp
+import com.amehrug.app.model.NoteTimestamps
 import com.amehrug.app.model.NoteType
 import com.amehrug.app.model.TextSpan
 import com.amehrug.app.model.TextSpans
 import com.amehrug.app.ui.media.ImageLoader
 import com.amehrug.app.ui.theme.noteContainerColor
+import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.collectLatest
@@ -95,7 +101,12 @@ import kotlinx.coroutines.sync.withLock
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
+fun NoteEditorScreen(
+    noteId: Long,
+    newType: NoteType,
+    timestamp: NoteTimestamp,
+    onClose: () -> Unit,
+) {
     val repository = AppGraph.notes
     var loaded by remember(noteId) { mutableStateOf(noteId == 0L) }
     var original by remember(noteId) { mutableStateOf(Note(type = newType)) }
@@ -108,6 +119,12 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
     // A style asked for with nothing selected, waiting for the next
     // characters. -1 means nothing is waiting.
     var pending by remember(noteId) { mutableStateOf(-1) }
+    // The creation date is the note's own, editable in place. While the
+    // field has the focus it holds whatever is being typed, which is often
+    // not a date yet, so the moment itself only moves when the text parses.
+    var createdAt by remember(noteId) { mutableStateOf(0L) }
+    var dateText by remember(noteId) { mutableStateOf("") }
+    var editingDate by remember(noteId) { mutableStateOf(false) }
     var color by remember(noteId) { mutableStateOf(NoteColor.DEFAULT) }
     var pinned by remember(noteId) { mutableStateOf(false) }
     var type by remember(noteId) { mutableStateOf(newType) }
@@ -134,6 +151,7 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
                 body = TextFieldValue(note.body)
                 spans = note.spans
                 color = note.color
+                createdAt = note.createdAt
                 pinned = note.pinned
                 type = note.type
                 items.clear()
@@ -162,7 +180,7 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
             attachments = attachments.toList(),
             reminders = original.reminders,
             pinned = pinned,
-            createdAt = original.createdAt,
+            createdAt = createdAt,
             modifiedAt = original.modifiedAt,
             deletedAt = original.deletedAt,
         ),
@@ -286,74 +304,104 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
                 .fillMaxSize()
                 .padding(insets),
         ) {
+            // The date sits above everything, centred, and the note starts
+            // right under it.
+            DateField(
+                shown = stampText(at = createdAt, format = timestamp),
+                editing = editingDate,
+                text = dateText,
+                onFocus = { focused ->
+                    editingDate = focused
+                    dateText = if (focused) {
+                        NoteTimestamps.editable(
+                            at = if (createdAt > 0) createdAt else System.currentTimeMillis(),
+                            zone = ZoneId.systemDefault(),
+                            locale = context.resources.configuration.locales[0],
+                        )
+                    } else {
+                        ""
+                    }
+                },
+                onTextChange = { typed ->
+                    dateText = typed
+                    val moment = NoteTimestamps.parse(
+                        text = typed,
+                        fallback = if (createdAt > 0) createdAt else System.currentTimeMillis(),
+                        zone = ZoneId.systemDefault(),
+                    )
+                    if (moment != null) createdAt = moment
+                },
+            )
             AttachmentStrip(attachments = attachments, onRemove = { removeAttachment(it) })
             if (!loaded) Spacer(modifier = Modifier.weight(1f))
-            if (loaded) when (type) {
-                NoteType.NOTE -> {
-                    StyledEditorField(
-                        value = body,
-                        spans = spans,
-                        onValueChange = { next ->
-                            if (next.text != body.text) {
-                                spans = TextSpans.afterEdit(spans, body.text, next.text, pending)
-                                pending = -1
-                            } else if (next.selection != body.selection) {
-                                // Moving the cursor drops a style that was
-                                // asked for and never used.
-                                pending = -1
-                            }
-                            body = next
-                        },
-                        placeholder = stringResource(R.string.editor_body),
-                        style = MaterialTheme.typography.bodyLarge,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .weight(1f)
-                            .verticalScroll(rememberScrollState())
-                            .padding(horizontal = 20.dp),
-                    )
-                    StyleBar(
-                        active = { kind ->
-                            val selection = body.selection
-                            if (selection.collapsed) {
-                                val base = if (pending >= 0) {
-                                    pending
-                                } else {
-                                    TextSpans.maskBefore(spans, body.text.length, selection.start)
+            if (loaded) Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
+                when (type) {
+                    NoteType.NOTE -> {
+                        StyledEditorField(
+                            value = body,
+                            spans = spans,
+                            onValueChange = { next ->
+                                if (next.text != body.text) {
+                                    spans = TextSpans.afterEdit(spans, body.text, next.text, pending)
+                                    pending = -1
+                                } else if (next.selection != body.selection) {
+                                    // Moving the cursor drops a style that was
+                                    // asked for and never used.
+                                    pending = -1
                                 }
-                                base and kind.bit != 0
-                            } else {
-                                TextSpans.covers(
-                                    spans,
-                                    body.text.length,
-                                    selection.start,
-                                    selection.end,
-                                    kind,
-                                )
-                            }
-                        },
-                        onToggle = { kind ->
-                            val selection = body.selection
-                            if (selection.collapsed) {
-                                val base = if (pending >= 0) {
-                                    pending
+                                body = next
+                            },
+                            placeholder = stringResource(R.string.editor_body),
+                            style = MaterialTheme.typography.bodyLarge,
+                            modifier = Modifier
+                                .weight(1f)
+                                .fillMaxHeight()
+                                .verticalScroll(rememberScrollState())
+                                .padding(start = 20.dp, end = 8.dp),
+                        )
+                        StyleBar(
+                            active = { kind ->
+                                val selection = body.selection
+                                if (selection.collapsed) {
+                                    val base = if (pending >= 0) {
+                                        pending
+                                    } else {
+                                        TextSpans.maskBefore(spans, body.text.length, selection.start)
+                                    }
+                                    base and kind.bit != 0
                                 } else {
-                                    TextSpans.maskBefore(spans, body.text.length, selection.start)
+                                    TextSpans.covers(
+                                        spans,
+                                        body.text.length,
+                                        selection.start,
+                                        selection.end,
+                                        kind,
+                                    )
                                 }
-                                pending = base xor kind.bit
-                            } else {
-                                spans = TextSpans.toggle(
-                                    spans,
-                                    body.text.length,
-                                    selection.start,
-                                    selection.end,
-                                    kind,
-                                )
-                            }
-                        },
-                    )
+                            },
+                            onToggle = { kind ->
+                                val selection = body.selection
+                                if (selection.collapsed) {
+                                    val base = if (pending >= 0) {
+                                        pending
+                                    } else {
+                                        TextSpans.maskBefore(spans, body.text.length, selection.start)
+                                    }
+                                    pending = base xor kind.bit
+                                } else {
+                                    spans = TextSpans.toggle(
+                                        spans,
+                                        body.text.length,
+                                        selection.start,
+                                        selection.end,
+                                        kind,
+                                    )
+                                }
+                            },
+                        )
+                    }
+                    NoteType.LIST -> Checklist(items = items, modifier = Modifier.weight(1f))
                 }
-                NoteType.LIST -> Checklist(items = items, modifier = Modifier.weight(1f))
             }
 
             // Everything below here is within reach of one thumb, which is
@@ -366,7 +414,10 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
                 value = title,
                 onValueChange = { title = it },
                 placeholder = stringResource(R.string.editor_title),
-                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.SemiBold),
+                style = MaterialTheme.typography.headlineSmall.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    textAlign = TextAlign.Center,
+                ),
                 modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
             )
             EditorDock(
@@ -513,7 +564,9 @@ private fun DockButton(action: DockAction, slot: androidx.compose.ui.unit.Dp) {
 }
 
 /**
- * The styles, at the bottom of the screen, above the keyboard.
+ * The styles, in a column down the right hand edge, beside the text rather
+ * than under it. It costs no height, which matters on a screen whose bottom
+ * already carries the title and the actions.
  *
  * Each button is its own letter drawn in the style it applies, so there is
  * nothing to learn and no icon to misread. Pressed with text selected it
@@ -527,12 +580,10 @@ private fun StyleBar(
     onToggle: (NoteStyle) -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 12.dp, vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
+    Column(
+        modifier = Modifier.padding(end = 8.dp, top = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         for (kind in STYLE_BUTTONS) {
             val on = active(kind)
@@ -643,6 +694,9 @@ private fun EditorField(
                 text = placeholder,
                 style = style,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                // Full width, so an alignment carried by the style reaches
+                // the placeholder as well as the text.
+                modifier = Modifier.fillMaxWidth(),
             )
         }
         BasicTextField(
@@ -653,6 +707,40 @@ private fun EditorField(
             modifier = Modifier.fillMaxWidth(),
         )
     }
+}
+
+/**
+ * The creation date, centred at the top of the note.
+ *
+ * Resting, it shows the date in whatever format the settings ask for.
+ * Touched, it swaps to a plain day, month and year, because two of those
+ * formats cannot be read back from their own text. Typing a real date moves
+ * the note's date. Typing anything else changes nothing, which is what has
+ * to happen while a date is still half typed.
+ */
+@Composable
+private fun DateField(
+    shown: String?,
+    editing: Boolean,
+    text: String,
+    onFocus: (Boolean) -> Unit,
+    onTextChange: (String) -> Unit,
+) {
+    if (shown == null && !editing) return
+    BasicTextField(
+        value = if (editing) text else shown.orEmpty(),
+        onValueChange = onTextChange,
+        singleLine = true,
+        textStyle = MaterialTheme.typography.labelLarge.copy(
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        ),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 6.dp)
+            .onFocusChanged { state -> onFocus(state.isFocused) },
+    )
 }
 
 @Composable
