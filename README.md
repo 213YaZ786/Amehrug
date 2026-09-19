@@ -15,11 +15,11 @@ Private notes for Android.
 - Material You colours from your wallpaper, and a layout that spreads out on
   a tablet or an unfolded screen.
 - No permission at all. 
+- Bold, italic, monospace and strikethrough, applied to a selection or armed
+  before typing. Styles from an imported Notally note are kept.
 
 ## Not yet
 
-- Bold, italic and the other text styles. They are preserved on a note that
-  already has them, and there is no way to add them here.
 - The home screen widget.
 - Export to TXT, Markdown, HTML or PDF.
 - Automatic backup on a schedule. Backups are manual for now.

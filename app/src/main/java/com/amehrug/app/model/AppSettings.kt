@@ -20,6 +20,7 @@ data class AppSettings(
     val lockEnabled: Boolean = false,
     val lockMethod: LockMethod = LockMethod.BIOMETRIC,
     val lockTimeoutSeconds: Int = 60,
+    val noteTimestamp: NoteTimestamp = NoteTimestamp.DATE_TIME,
     val dockOrder: List<DockItem> = DockItem.entries.toList(),
 )
 
@@ -33,6 +34,7 @@ object SettingsCodec {
     const val LOCK_METHOD = "lock.method"
     const val LOCK_TIMEOUT = "lock.timeoutSeconds"
     const val DOCK_ORDER = "dock.order"
+    const val NOTE_TIMESTAMP = "notes.timestamp"
 
     fun decode(rows: Map<String, String>): AppSettings {
         val defaults = AppSettings()
@@ -48,6 +50,7 @@ object SettingsCodec {
             lockEnabled = enabled,
             lockMethod = decodeLockMethod(rows[LOCK_METHOD]),
             lockTimeoutSeconds = timeout,
+            noteTimestamp = decodeNoteTimestamp(rows[NOTE_TIMESTAMP]),
             dockOrder = decodeDockOrder(rows[DOCK_ORDER]),
         )
     }
@@ -74,6 +77,12 @@ object SettingsCodec {
         LockMethod.entries.firstOrNull { it.name == raw?.trim() } ?: AppSettings().lockMethod
 
     fun encodeLockMethod(method: LockMethod): Pair<String, String> = LOCK_METHOD to method.name
+
+    /** An unknown or damaged name falls back to the default format. */
+    fun decodeNoteTimestamp(raw: String?): NoteTimestamp =
+        NoteTimestamp.entries.firstOrNull { it.name == raw?.trim() } ?: AppSettings().noteTimestamp
+
+    fun encodeNoteTimestamp(format: NoteTimestamp): Pair<String, String> = NOTE_TIMESTAMP to format.name
 
     fun encodeLockEnabled(enabled: Boolean): Pair<String, String> = LOCK_ENABLED to enabled.toString()
 

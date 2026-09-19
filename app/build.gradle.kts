@@ -14,8 +14,8 @@ android {
         applicationId = "com.amehrug.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 23
-        versionName = "0.14.0"
+        versionCode = 28
+        versionName = "0.17.0"
     }
 
     // Signing comes from the environment, so no key and no password is ever
@@ -81,6 +81,10 @@ android {
 
     androidResources {
         generateLocaleConfig = true
+        // English only for now. This also drops the translations the
+        // androidx libraries carry for seventy other languages, which the
+        // app would otherwise ship without using.
+        localeFilters += listOf("en")
     }
 
     packaging {

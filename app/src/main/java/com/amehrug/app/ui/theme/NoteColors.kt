@@ -5,6 +5,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.ReadOnlyComposable
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.lerp
 import com.amehrug.app.model.NoteColor
 
 /**
@@ -55,3 +56,22 @@ fun noteContainerColor(color: NoteColor): Color {
 @Composable
 @ReadOnlyComposable
 fun noteContentColor(): Color = MaterialTheme.colorScheme.onSurface
+
+/**
+ * The permanent outline of a card.
+ *
+ * It comes from the dynamic palette, never from a fixed paint, and it is
+ * always a different colour from the fill it surrounds. A default note takes
+ * the scheme outline as is. A tinted note takes that same outline pulled part
+ * of the way back towards its own tint, so the card keeps its hue while the
+ * edge stays clearly darker in light mode and clearly lighter in dark mode.
+ */
+@Composable
+@ReadOnlyComposable
+fun noteOutlineColor(color: NoteColor): Color {
+    val outline = MaterialTheme.colorScheme.outline
+    if (color == NoteColor.DEFAULT) return outline
+    val tints = if (isSystemInDarkTheme()) darkTints else lightTints
+    val tint = tints[color] ?: return outline
+    return lerp(tint, outline, 0.55f)
+}

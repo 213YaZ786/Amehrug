@@ -49,10 +49,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontFamily
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
+import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import com.amehrug.app.AppGraph
 import com.amehrug.app.R
@@ -62,7 +68,10 @@ import com.amehrug.app.model.AttachmentKind
 import com.amehrug.app.model.ListItem
 import com.amehrug.app.model.Note
 import com.amehrug.app.model.NoteColor
+import com.amehrug.app.model.NoteStyle
 import com.amehrug.app.model.NoteType
+import com.amehrug.app.model.TextSpan
+import com.amehrug.app.model.TextSpans
 import com.amehrug.app.ui.media.ImageLoader
 import com.amehrug.app.ui.theme.noteContainerColor
 import kotlinx.coroutines.CancellationException
@@ -90,7 +99,13 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
     var original by remember(noteId) { mutableStateOf(Note(type = newType)) }
 
     var title by remember(noteId) { mutableStateOf("") }
-    var body by remember(noteId) { mutableStateOf("") }
+    // The body carries its selection, because styling applies to whatever is
+    // selected and the field is the only place that knows.
+    var body by remember(noteId) { mutableStateOf(TextFieldValue("")) }
+    var spans by remember(noteId) { mutableStateOf(emptyList<TextSpan>()) }
+    // A style asked for with nothing selected, waiting for the next
+    // characters. -1 means nothing is waiting.
+    var pending by remember(noteId) { mutableStateOf(-1) }
     var color by remember(noteId) { mutableStateOf(NoteColor.DEFAULT) }
     var pinned by remember(noteId) { mutableStateOf(false) }
     var type by remember(noteId) { mutableStateOf(newType) }
@@ -113,7 +128,8 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
             if (note != null) {
                 original = note
                 title = note.title
-                body = note.body
+                body = TextFieldValue(note.body)
+                spans = note.spans
                 color = note.color
                 pinned = note.pinned
                 type = note.type
@@ -136,11 +152,8 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
             folder = original.folder,
             color = color,
             title = title,
-            body = body,
-            // Carried through untouched. The editor cannot style text yet,
-            // roadmap task 11, and a note imported from Notally arrives with
-            // spans. Leaving this out wrote them away on the first save.
-            spans = original.spans,
+            body = body.text,
+            spans = spans,
             items = items.toList(),
             labels = original.labels,
             attachments = attachments.toList(),
@@ -351,20 +364,190 @@ fun NoteEditorScreen(noteId: Long, newType: NoteType, onClose: () -> Unit) {
             AttachmentStrip(attachments = attachments, onRemove = { removeAttachment(it) })
             if (!loaded) return@Column
             when (type) {
-                NoteType.NOTE -> EditorField(
-                    value = body,
-                    onValueChange = { body = it },
-                    placeholder = stringResource(R.string.editor_body),
-                    style = MaterialTheme.typography.bodyLarge,
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .weight(1f)
-                        .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 20.dp),
-                )
+                NoteType.NOTE -> {
+                    StyledEditorField(
+                        value = body,
+                        spans = spans,
+                        onValueChange = { next ->
+                            if (next.text != body.text) {
+                                spans = TextSpans.afterEdit(spans, body.text, next.text, pending)
+                                pending = -1
+                            } else if (next.selection != body.selection) {
+                                // Moving the cursor drops a style that was
+                                // asked for and never used.
+                                pending = -1
+                            }
+                            body = next
+                        },
+                        placeholder = stringResource(R.string.editor_body),
+                        style = MaterialTheme.typography.bodyLarge,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .weight(1f)
+                            .verticalScroll(rememberScrollState())
+                            .padding(horizontal = 20.dp),
+                    )
+                    StyleBar(
+                        active = { kind ->
+                            val selection = body.selection
+                            if (selection.collapsed) {
+                                val base = if (pending >= 0) {
+                                    pending
+                                } else {
+                                    TextSpans.maskBefore(spans, body.text.length, selection.start)
+                                }
+                                base and kind.bit != 0
+                            } else {
+                                TextSpans.covers(
+                                    spans,
+                                    body.text.length,
+                                    selection.start,
+                                    selection.end,
+                                    kind,
+                                )
+                            }
+                        },
+                        onToggle = { kind ->
+                            val selection = body.selection
+                            if (selection.collapsed) {
+                                val base = if (pending >= 0) {
+                                    pending
+                                } else {
+                                    TextSpans.maskBefore(spans, body.text.length, selection.start)
+                                }
+                                pending = base xor kind.bit
+                            } else {
+                                spans = TextSpans.toggle(
+                                    spans,
+                                    body.text.length,
+                                    selection.start,
+                                    selection.end,
+                                    kind,
+                                )
+                            }
+                        },
+                    )
+                }
                 NoteType.LIST -> Checklist(items = items, modifier = Modifier.weight(1f))
             }
         }
+    }
+}
+
+/**
+ * The styles, at the bottom of the screen, above the keyboard.
+ *
+ * Each button is its own letter drawn in the style it applies, so there is
+ * nothing to learn and no icon to misread. Pressed with text selected it
+ * styles the selection. Pressed with nothing selected it arms the style for
+ * whatever is typed next, which is how someone turns bold on before writing
+ * the word rather than after.
+ */
+@Composable
+private fun StyleBar(
+    active: (NoteStyle) -> Boolean,
+    onToggle: (NoteStyle) -> Unit,
+) {
+    val haptics = LocalHapticFeedback.current
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        for (kind in STYLE_BUTTONS) {
+            val on = active(kind)
+            Surface(
+                shape = CircleShape,
+                color = if (on) {
+                    MaterialTheme.colorScheme.secondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainerHigh
+                },
+                contentColor = if (on) {
+                    MaterialTheme.colorScheme.onSecondaryContainer
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+                modifier = Modifier
+                    .size(44.dp)
+                    .clickable {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        onToggle(kind)
+                    },
+            ) {
+                Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
+                    Text(
+                        text = styleLetter(kind),
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            fontWeight = if (kind == NoteStyle.BOLD) FontWeight.Bold else null,
+                            fontStyle = if (kind == NoteStyle.ITALIC) FontStyle.Italic else null,
+                            fontFamily = if (kind == NoteStyle.MONOSPACE) {
+                                FontFamily.Monospace
+                            } else {
+                                null
+                            },
+                            textDecoration = if (kind == NoteStyle.STRIKETHROUGH) {
+                                TextDecoration.LineThrough
+                            } else {
+                                null
+                            },
+                        ),
+                    )
+                }
+            }
+        }
+    }
+}
+
+private val STYLE_BUTTONS = listOf(
+    NoteStyle.BOLD,
+    NoteStyle.ITALIC,
+    NoteStyle.MONOSPACE,
+    NoteStyle.STRIKETHROUGH,
+)
+
+private fun styleLetter(kind: NoteStyle): String = when (kind) {
+    NoteStyle.BOLD -> "B"
+    NoteStyle.ITALIC -> "I"
+    NoteStyle.MONOSPACE -> "M"
+    NoteStyle.STRIKETHROUGH -> "S"
+    NoteStyle.LINK -> "L"
+}
+
+/**
+ * The body field. Same as [EditorField] but carrying a selection and the
+ * styles, which the plain one does not need.
+ */
+@Composable
+private fun StyledEditorField(
+    value: TextFieldValue,
+    spans: List<TextSpan>,
+    onValueChange: (TextFieldValue) -> Unit,
+    placeholder: String,
+    style: androidx.compose.ui.text.TextStyle,
+    modifier: Modifier = Modifier,
+) {
+    val linkColor = MaterialTheme.colorScheme.primary
+    Box(modifier = modifier.fillMaxWidth()) {
+        if (value.text.isEmpty()) {
+            Text(
+                text = placeholder,
+                style = style,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        BasicTextField(
+            value = value,
+            onValueChange = onValueChange,
+            textStyle = style.copy(color = MaterialTheme.colorScheme.onSurface),
+            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+            visualTransformation = remember(spans, linkColor) {
+                SpanTransformation(spans, linkColor)
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
     }
 }
 

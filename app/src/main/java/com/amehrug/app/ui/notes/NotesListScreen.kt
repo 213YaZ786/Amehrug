@@ -1,5 +1,6 @@
 package com.amehrug.app.ui.notes
 
+import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -32,17 +33,24 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
@@ -54,6 +62,7 @@ import com.amehrug.app.R
 import com.amehrug.app.model.DockItem
 import com.amehrug.app.model.Folder
 import com.amehrug.app.model.Note
+import com.amehrug.app.model.NoteTimestamp
 import com.amehrug.app.model.NoteType
 import com.amehrug.app.ui.topBarInsets
 import kotlinx.coroutines.launch
@@ -77,6 +86,7 @@ fun NotesListScreen(
     onMenu: () -> Unit,
     showMenu: Boolean,
     dockOrder: List<DockItem>,
+    timestamp: NoteTimestamp,
     onDockReorder: (List<DockItem>) -> Unit,
     onHome: () -> Unit,
     onSettings: () -> Unit,
@@ -110,6 +120,18 @@ fun NotesListScreen(
     val chosen = notes.filter { it.id in selected }
     val ids = chosen.map { it.id }
 
+    // A sweep in progress. The grid stops answering the finger while it
+    // lasts, otherwise the wall scrolls under the selection.
+    var sweeping by remember { mutableStateOf(false) }
+    // -1, 0 or 1. Only the direction, so the scrolling effect below is not
+    // restarted on every frame.
+    var edge by remember { mutableStateOf(0f) }
+    var finger by remember { mutableStateOf(Offset.Zero) }
+    val haptics = LocalHapticFeedback.current
+    // The gesture block below is created once and outlives recomposition, so
+    // it must not hold on to the first callback it was handed.
+    val open by rememberUpdatedState(onOpen)
+
     fun clear() {
         selected = emptySet()
         asking = Ask.NONE
@@ -140,42 +162,74 @@ fun NotesListScreen(
             modifier = Modifier.fillMaxSize(),
             contentWindowInsets = WindowInsets.safeDrawing,
             topBar = {
-                if (selected.isNotEmpty()) {
-                    SelectionBar(
-                        count = selected.size,
-                        folder = folder,
-                        onClose = { clear() },
-                        onPin = {
-                            val pin = chosen.any { !it.pinned }
-                            act { repository.setPinned(ids, pin) }
-                        },
-                        onColor = { asking = Ask.COLOR },
-                        onLabels = { asking = Ask.LABELS },
-                        onArchive = { act { repository.archive(ids) } },
-                        onTrash = { act { repository.moveToTrash(ids) } },
-                        onRestore = { act { repository.restore(ids) } },
-                        onDeleteForever = { asking = Ask.DELETE },
-                    )
-                } else {
-                    NotesSearchBar(
-                        query = query,
-                        onQueryChange = onQueryChange,
-                        onMenu = onMenu,
-                        showMenu = showMenu,
-                        folder = folder,
-                        focusRequester = searchFocus,
-                    )
-                }
+                NotesSearchBar(
+                    query = query,
+                    onQueryChange = onQueryChange,
+                    onMenu = onMenu,
+                    showMenu = showMenu,
+                    folder = folder,
+                    focusRequester = searchFocus,
+                )
             },
         ) { insets ->
             Box(modifier = Modifier.fillMaxSize()) {
                 if (notes.isEmpty()) {
                     EmptyState(folder = folder, searching = query.isNotBlank(), modifier = Modifier.padding(insets))
                 } else {
+                    // Selecting by hand: hold a card to start, then slide
+                    // across the wall to take the neighbours. Reading the
+                    // gesture once here rather than card by card is what
+                    // makes the slide possible at all.
+                    fun take(point: Offset) {
+                        val id = noteAt(gridState, point) ?: return
+                        if (id !in selected) {
+                            selected = selected + id
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                    }
+
                     LazyVerticalStaggeredGrid(
                         columns = StaggeredGridCells.Fixed(gridColumns),
                         state = gridState,
-                        modifier = Modifier.fillMaxSize(),
+                        userScrollEnabled = !sweeping,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .pointerInput(Unit) {
+                                detectSelectionGestures(
+                                    onTap = { point ->
+                                        val id = noteAt(gridState, point)
+                                        if (id != null) {
+                                            if (selected.isEmpty()) {
+                                                open(id)
+                                            } else {
+                                                selected = toggle(selected, id)
+                                            }
+                                        }
+                                    },
+                                    onSweepStart = { point ->
+                                        val id = noteAt(gridState, point)
+                                        if (id != null) {
+                                            sweeping = true
+                                            finger = point
+                                            selected = toggle(selected, id)
+                                            haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        }
+                                    },
+                                    onSweepMove = { point ->
+                                        if (sweeping) {
+                                            finger = point
+                                            take(point)
+                                        }
+                                    },
+                                    onEdge = { direction ->
+                                        if (sweeping) edge = direction
+                                    },
+                                    onSweepEnd = {
+                                        sweeping = false
+                                        edge = 0f
+                                    },
+                                )
+                            },
                         contentPadding = PaddingValues(
                             start = 12.dp,
                             end = 12.dp,
@@ -192,15 +246,8 @@ fun NotesListScreen(
                             items(pinned, key = { "pinned-${it.id}" }) { note ->
                                 NoteCard(
                                     note = note,
+                                    timestamp = timestamp,
                                     selected = note.id in selected,
-                                    onClick = {
-                                        if (selected.isEmpty()) {
-                                            onOpen(note.id)
-                                        } else {
-                                            selected = toggle(selected, note.id)
-                                        }
-                                    },
-                                    onLongClick = { selected = toggle(selected, note.id) },
                                     modifier = Modifier.animateItem(),
                                 )
                             }
@@ -213,15 +260,8 @@ fun NotesListScreen(
                         items(if (query.isBlank()) others else notes, key = { it.id }) { note ->
                             NoteCard(
                                 note = note,
+                                timestamp = timestamp,
                                 selected = note.id in selected,
-                                onClick = {
-                                    if (selected.isEmpty()) {
-                                        onOpen(note.id)
-                                    } else {
-                                        selected = toggle(selected, note.id)
-                                    }
-                                },
-                                onLongClick = { selected = toggle(selected, note.id) },
                                 modifier = Modifier.animateItem(),
                             )
                         }
@@ -229,24 +269,61 @@ fun NotesListScreen(
                 }
 
                 // The dock floats over the wall, so the grid keeps its
-                // full height and cards pass under the pill.
-                NoteDock(
-                    order = dockOrder,
-                    columns = columns,
-                    selected = if (query.isBlank()) DockItem.HOME else DockItem.SEARCH,
-                    onAction = { item ->
-                        when (item) {
-                            DockItem.HOME -> onHome()
-                            DockItem.SEARCH -> if (selected.isEmpty()) searchFocus.requestFocus()
-                            DockItem.LAYOUT -> onColumnsChange(if (columns == 2) 1 else 2)
-                            DockItem.LIST -> onCreate(NoteType.LIST)
-                            DockItem.NOTE -> onCreate(NoteType.NOTE)
-                            DockItem.SETTINGS -> onSettings()
-                        }
-                    },
-                    onReorder = onDockReorder,
-                    modifier = Modifier.align(Alignment.BottomCenter),
-                )
+                // full height and cards pass under the pill. While notes are
+                // selected the same spot carries the actions instead, which
+                // keeps every button under the thumb that just held a card.
+                if (selected.isNotEmpty()) {
+                    SelectionBar(
+                        count = selected.size,
+                        folder = folder,
+                        onClose = { clear() },
+                        onPin = {
+                            val pin = chosen.any { !it.pinned }
+                            act { repository.setPinned(ids, pin) }
+                        },
+                        onColor = { asking = Ask.COLOR },
+                        onLabels = { asking = Ask.LABELS },
+                        onArchive = { act { repository.archive(ids) } },
+                        onTrash = { act { repository.moveToTrash(ids) } },
+                        onRestore = { act { repository.restore(ids) } },
+                        onDeleteForever = { asking = Ask.DELETE },
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                } else {
+                    NoteDock(
+                        order = dockOrder,
+                        columns = columns,
+                        selected = if (query.isBlank()) DockItem.HOME else DockItem.SEARCH,
+                        onAction = { item ->
+                            when (item) {
+                                DockItem.HOME -> onHome()
+                                DockItem.SEARCH -> searchFocus.requestFocus()
+                                DockItem.LAYOUT -> onColumnsChange(if (columns == 2) 1 else 2)
+                                DockItem.LIST -> onCreate(NoteType.LIST)
+                                DockItem.NOTE -> onCreate(NoteType.NOTE)
+                                DockItem.SETTINGS -> onSettings()
+                            }
+                        },
+                        onReorder = onDockReorder,
+                        modifier = Modifier.align(Alignment.BottomCenter),
+                    )
+                }
+            }
+        }
+    }
+
+    // The wall keeps moving while the finger rests against an edge, and
+    // whatever arrives under it joins the selection.
+    LaunchedEffect(edge) {
+        if (edge != 0f) {
+            while (true) {
+                gridState.scrollBy(edge * 26f)
+                val id = noteAt(gridState, finger)
+                if (id != null && id !in selected) {
+                    selected = selected + id
+                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                }
+                withFrameNanos { }
             }
         }
     }

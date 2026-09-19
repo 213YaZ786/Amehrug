@@ -290,6 +290,7 @@ private fun AmehrugRoot(settings: AppSettings) {
                     onMenu = { scope.launch { drawer.open() } },
                     showMenu = showMenu,
                     dockOrder = settings.dockOrder,
+                    timestamp = settings.noteTimestamp,
                     onDockReorder = { order ->
                         AppGraph.appScope.launch { AppGraph.settings.setDockOrder(order) }
                     },

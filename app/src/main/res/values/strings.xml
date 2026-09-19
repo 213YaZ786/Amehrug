@@ -43,6 +43,34 @@
         <item quantity="one">%d minute</item>
         <item quantity="other">%d minutes</item>
     </plurals>
+    <string name="settings_timestamp">Format of the date on the notes</string>
+    <string name="settings_timestamp_off">No date</string>
+    <string name="settings_timestamp_date_time">Sat Sep 19 13:15</string>
+    <string name="settings_timestamp_numeric">19/09/2026</string>
+    <string name="settings_timestamp_relative">3 days ago</string>
+    <string name="settings_timestamp_hijri">Hijri calendar</string>
+    <string name="settings_timestamp_hijri_summary">Umm al-Qura, the arithmetic calendar. A day out from a local sighting is normal.</string>
+    <string name="stamp_just_now">Just now</string>
+    <plurals name="stamp_minutes">
+        <item quantity="one">%d minute ago</item>
+        <item quantity="other">%d minutes ago</item>
+    </plurals>
+    <plurals name="stamp_hours">
+        <item quantity="one">%d hour ago</item>
+        <item quantity="other">%d hours ago</item>
+    </plurals>
+    <plurals name="stamp_days">
+        <item quantity="one">%d day ago</item>
+        <item quantity="other">%d days ago</item>
+    </plurals>
+    <plurals name="stamp_months">
+        <item quantity="one">%d month ago</item>
+        <item quantity="other">%d months ago</item>
+    </plurals>
+    <plurals name="stamp_years">
+        <item quantity="one">%d year ago</item>
+        <item quantity="other">%d years ago</item>
+    </plurals>
     <string name="action_continue">Continue</string>
     <string name="action_cancel">Cancel</string>
 
