@@ -17,11 +17,13 @@ Private notes for Android.
 - No permission at all. 
 - Bold, italic, monospace and strikethrough, applied to a selection or armed
   before typing. Styles from an imported Notally note are kept.
+- Export to TXT, Markdown, HTML or PDF, from an open note or from a selection
+  on the wall. The file goes wherever the system picker is pointed, which
+  needs no permission.
 
 ## Not yet
 
 - The home screen widget.
-- Export to TXT, Markdown, HTML or PDF.
 - Automatic backup on a schedule. Backups are manual for now.
 
 ## Encryption
