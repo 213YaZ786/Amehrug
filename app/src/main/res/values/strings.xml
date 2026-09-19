@@ -152,6 +152,8 @@
     <string name="attachment_no_player">Playing recordings comes later. The file is kept, encrypted.</string>
     <string name="attachment_failed">That picture could not be added.</string>
     <string name="action_export">Export</string>
+    <string name="action_empty_trash">Empty the trash</string>
+    <string name="empty_trash_message">Every note in the trash goes for good, with its files. Nothing brings them back.</string>
     <string name="export_title">Export as</string>
     <string name="export_txt">Plain text (.txt)</string>
     <string name="export_markdown">Markdown (.md)</string>

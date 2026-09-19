@@ -16,9 +16,11 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.scaleOut
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
@@ -220,57 +222,71 @@ private fun AmehrugRoot(settings: AppSettings) {
     // The sheet scrolls. Without it, a few labels push Settings and
     // Diagnostics off the bottom of the screen, where nothing can reach them.
     val drawerContent: @Composable () -> Unit = {
-        Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-            Text(
-                text = stringResource(R.string.app_name),
-                style = MaterialTheme.typography.titleLarge,
-                modifier = Modifier.padding(start = 28.dp, top = 24.dp, bottom = 16.dp),
-            )
-            DrawerRow(R.string.folder_notes, R.drawable.ic_note, folder == Folder.NOTES) {
-                folderName = Folder.NOTES.name
-                labelFilter = ""
-                screenName = NOTES
-                scope.launch { drawer.close() }
-            }
-            DrawerRow(R.string.folder_archive, R.drawable.ic_archive, folder == Folder.ARCHIVED) {
-                folderName = Folder.ARCHIVED.name
-                labelFilter = ""
-                screenName = NOTES
-                scope.launch { drawer.close() }
-            }
-            DrawerRow(R.string.folder_trash, R.drawable.ic_delete, folder == Folder.DELETED) {
-                folderName = Folder.DELETED.name
-                labelFilter = ""
-                screenName = NOTES
-                scope.launch { drawer.close() }
-            }
-            if (labels.isNotEmpty()) {
-                Text(
-                    text = stringResource(R.string.drawer_labels),
-                    style = MaterialTheme.typography.labelLarge,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.padding(start = 28.dp, top = 16.dp, bottom = 4.dp),
-                )
-                for (label in labels) {
-                    DrawerRow(
-                        label = label,
-                        icon = R.drawable.ic_label,
-                        selected = labelFilter == label,
-                    ) {
-                        labelFilter = label
-                        folderName = Folder.NOTES.name
-                        screenName = NOTES
-                        scope.launch { drawer.close() }
+        // Centred when it fits, scrolling when it does not. The name of the
+        // app is not repeated here: it is the only app on this screen.
+        Box(
+            modifier = Modifier.fillMaxHeight(),
+            contentAlignment = Alignment.Center,
+        ) {
+            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
+                DrawerRow(
+                    R.string.folder_notes,
+                    R.drawable.ic_note,
+                    screenName == NOTES && folder == Folder.NOTES && labelFilter.isEmpty(),
+                ) {
+                    folderName = Folder.NOTES.name
+                    labelFilter = ""
+                    screenName = NOTES
+                    scope.launch { drawer.close() }
+                }
+                DrawerRow(
+                    R.string.folder_archive,
+                    R.drawable.ic_archive,
+                    screenName == NOTES && folder == Folder.ARCHIVED,
+                ) {
+                    folderName = Folder.ARCHIVED.name
+                    labelFilter = ""
+                    screenName = NOTES
+                    scope.launch { drawer.close() }
+                }
+                DrawerRow(
+                    R.string.folder_trash,
+                    R.drawable.ic_delete,
+                    screenName == NOTES && folder == Folder.DELETED,
+                ) {
+                    folderName = Folder.DELETED.name
+                    labelFilter = ""
+                    screenName = NOTES
+                    scope.launch { drawer.close() }
+                }
+                if (labels.isNotEmpty()) {
+                    Text(
+                        text = stringResource(R.string.drawer_labels),
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(start = 28.dp, top = 16.dp, bottom = 4.dp),
+                    )
+                    for (label in labels) {
+                        DrawerRow(
+                            label = label,
+                            icon = R.drawable.ic_label,
+                            selected = screenName == NOTES && labelFilter == label,
+                        ) {
+                            labelFilter = label
+                            folderName = Folder.NOTES.name
+                            screenName = NOTES
+                            scope.launch { drawer.close() }
+                        }
                     }
                 }
-            }
-            DrawerRow(R.string.settings_title, R.drawable.ic_settings, screenName == SETTINGS) {
-                screenName = SETTINGS
-                scope.launch { drawer.close() }
-            }
-            DrawerRow(R.string.diagnostics_title, R.drawable.ic_bug, screenName == DIAGNOSTICS) {
-                screenName = DIAGNOSTICS
-                scope.launch { drawer.close() }
+                DrawerRow(R.string.settings_title, R.drawable.ic_settings, screenName == SETTINGS) {
+                    screenName = SETTINGS
+                    scope.launch { drawer.close() }
+                }
+                DrawerRow(R.string.diagnostics_title, R.drawable.ic_bug, screenName == DIAGNOSTICS) {
+                    screenName = DIAGNOSTICS
+                    scope.launch { drawer.close() }
+                }
             }
         }
     }

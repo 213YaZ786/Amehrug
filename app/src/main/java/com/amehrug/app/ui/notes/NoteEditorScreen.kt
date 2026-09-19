@@ -9,6 +9,7 @@ import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
@@ -26,6 +27,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Checkbox
@@ -51,6 +53,7 @@ import androidx.compose.runtime.toMutableStateList
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -81,6 +84,7 @@ import com.amehrug.app.model.TextSpan
 import com.amehrug.app.model.TextSpans
 import com.amehrug.app.ui.media.ImageLoader
 import com.amehrug.app.ui.theme.noteContainerColor
+import com.amehrug.app.ui.theme.noteContentColor
 import java.time.ZoneId
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.delay
@@ -122,7 +126,11 @@ fun NoteEditorScreen(
     // The creation date is the note's own, editable in place. While the
     // field has the focus it holds whatever is being typed, which is often
     // not a date yet, so the moment itself only moves when the text parses.
-    var createdAt by remember(noteId) { mutableStateOf(0L) }
+    // A new note is dated the moment it is opened, so the date zone is never
+    // empty and the note never starts flush against the top of the screen.
+    var createdAt by remember(noteId) {
+        mutableStateOf(if (noteId == 0L) System.currentTimeMillis() else 0L)
+    }
     var dateText by remember(noteId) { mutableStateOf("") }
     var editingDate by remember(noteId) { mutableStateOf(false) }
     var color by remember(noteId) { mutableStateOf(NoteColor.DEFAULT) }
@@ -293,7 +301,9 @@ fun NoteEditorScreen(
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
-        containerColor = background,
+        // The page behind is plain. The note's colour belongs to the zones,
+        // the way it belongs to a card on the wall rather than to the wall.
+        containerColor = MaterialTheme.colorScheme.surface,
         // safeDrawing so the keyboard counts as an edge. Everything that is
         // reached by hand lives at the bottom of this screen, so it has to
         // ride above the keyboard rather than under it.
@@ -302,41 +312,56 @@ fun NoteEditorScreen(
         Column(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(insets),
+                .padding(insets)
+                .padding(horizontal = 10.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             // The date sits above everything, centred, and the note starts
             // right under it.
-            DateField(
-                shown = stampText(at = createdAt, format = timestamp),
-                editing = editingDate,
-                text = dateText,
-                onFocus = { focused ->
-                    editingDate = focused
-                    dateText = if (focused) {
-                        NoteTimestamps.editable(
+            EditorZone(background) {
+                DateField(
+                    // The editor always shows a date. When the settings ask
+                    // for no date on the cards, that choice is about the
+                    // wall, and the plain form is used here instead.
+                    shown = stampText(at = createdAt, format = timestamp)
+                        ?: NoteTimestamps.editable(
                             at = if (createdAt > 0) createdAt else System.currentTimeMillis(),
                             zone = ZoneId.systemDefault(),
                             locale = context.resources.configuration.locales[0],
+                        ),
+                    editing = editingDate,
+                    text = dateText,
+                    onFocus = { focused ->
+                        editingDate = focused
+                        dateText = if (focused) {
+                            NoteTimestamps.editable(
+                                at = if (createdAt > 0) createdAt else System.currentTimeMillis(),
+                                zone = ZoneId.systemDefault(),
+                                locale = context.resources.configuration.locales[0],
+                            )
+                        } else {
+                            ""
+                        }
+                    },
+                    onTextChange = { typed ->
+                        dateText = typed
+                        val moment = NoteTimestamps.parse(
+                            text = typed,
+                            fallback = if (createdAt > 0) createdAt else System.currentTimeMillis(),
+                            zone = ZoneId.systemDefault(),
                         )
-                    } else {
-                        ""
-                    }
-                },
-                onTextChange = { typed ->
-                    dateText = typed
-                    val moment = NoteTimestamps.parse(
-                        text = typed,
-                        fallback = if (createdAt > 0) createdAt else System.currentTimeMillis(),
-                        zone = ZoneId.systemDefault(),
-                    )
-                    if (moment != null) createdAt = moment
-                },
-            )
+                        if (moment != null) createdAt = moment
+                    },
+                )
+            }
             AttachmentStrip(attachments = attachments, onRemove = { removeAttachment(it) })
             if (!loaded) Spacer(modifier = Modifier.weight(1f))
             if (loaded) Row(modifier = Modifier.fillMaxWidth().weight(1f)) {
                 when (type) {
-                    NoteType.NOTE -> {
+                    NoteType.NOTE -> EditorZone(
+                        color = background,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    ) {
                         StyledEditorField(
                             value = body,
                             spans = spans,
@@ -354,53 +379,66 @@ fun NoteEditorScreen(
                             placeholder = stringResource(R.string.editor_body),
                             style = MaterialTheme.typography.bodyLarge,
                             modifier = Modifier
-                                .weight(1f)
-                                .fillMaxHeight()
+                                .fillMaxSize()
                                 .verticalScroll(rememberScrollState())
-                                .padding(start = 20.dp, end = 8.dp),
-                        )
-                        StyleBar(
-                            active = { kind ->
-                                val selection = body.selection
-                                if (selection.collapsed) {
-                                    val base = if (pending >= 0) {
-                                        pending
-                                    } else {
-                                        TextSpans.maskBefore(spans, body.text.length, selection.start)
-                                    }
-                                    base and kind.bit != 0
-                                } else {
-                                    TextSpans.covers(
-                                        spans,
-                                        body.text.length,
-                                        selection.start,
-                                        selection.end,
-                                        kind,
-                                    )
-                                }
-                            },
-                            onToggle = { kind ->
-                                val selection = body.selection
-                                if (selection.collapsed) {
-                                    val base = if (pending >= 0) {
-                                        pending
-                                    } else {
-                                        TextSpans.maskBefore(spans, body.text.length, selection.start)
-                                    }
-                                    pending = base xor kind.bit
-                                } else {
-                                    spans = TextSpans.toggle(
-                                        spans,
-                                        body.text.length,
-                                        selection.start,
-                                        selection.end,
-                                        kind,
-                                    )
-                                }
-                            },
+                                .padding(horizontal = 16.dp, vertical = 12.dp),
                         )
                     }
-                    NoteType.LIST -> Checklist(items = items, modifier = Modifier.weight(1f))
+                    NoteType.LIST -> EditorZone(
+                        color = background,
+                        modifier = Modifier.weight(1f).fillMaxHeight(),
+                    ) {
+                        Checklist(items = items, modifier = Modifier.fillMaxSize())
+                    }
+                }
+                if (type == NoteType.NOTE) {
+                    // The mask is worked out here rather than inside
+                    // the bar. Handing the bar a function that reads
+                    // state means the bar's own parameters never change,
+                    // so Compose skips it and the buttons never light up.
+                    val selection = body.selection
+                    val activeStyles = if (selection.collapsed) {
+                        if (pending >= 0) {
+                            pending
+                        } else {
+                            TextSpans.maskBefore(spans, body.text.length, selection.start)
+                        }
+                    } else {
+                        var mask = 0
+                        for (kind in STYLE_BUTTONS) {
+                            val covered = TextSpans.covers(
+                                spans,
+                                body.text.length,
+                                selection.start,
+                                selection.end,
+                                kind,
+                            )
+                            if (covered) mask = mask or kind.bit
+                        }
+                        mask
+                    }
+                    StyleBar(
+                        active = activeStyles,
+                        onToggle = { kind ->
+                            val at = body.selection
+                            if (at.collapsed) {
+                                val base = if (pending >= 0) {
+                                    pending
+                                } else {
+                                    TextSpans.maskBefore(spans, body.text.length, at.start)
+                                }
+                                pending = base xor kind.bit
+                            } else {
+                                spans = TextSpans.toggle(
+                                    spans,
+                                    body.text.length,
+                                    at.start,
+                                    at.end,
+                                    kind,
+                                )
+                            }
+                        },
+                    )
                 }
             }
 
@@ -410,16 +448,18 @@ fun NoteEditorScreen(
             if (showColors) {
                 ColorRow(selected = color, onSelect = { color = it })
             }
-            EditorField(
-                value = title,
-                onValueChange = { title = it },
-                placeholder = stringResource(R.string.editor_title),
-                style = MaterialTheme.typography.headlineSmall.copy(
-                    fontWeight = FontWeight.SemiBold,
-                    textAlign = TextAlign.Center,
-                ),
-                modifier = Modifier.padding(horizontal = 20.dp, vertical = 6.dp),
-            )
+            EditorZone(background) {
+                EditorField(
+                    value = title,
+                    onValueChange = { title = it },
+                    placeholder = stringResource(R.string.editor_title),
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.SemiBold,
+                        textAlign = TextAlign.Center,
+                    ),
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+                )
+            }
             EditorDock(
                 pinned = pinned,
                 colorsOpen = showColors,
@@ -576,34 +616,45 @@ private fun DockButton(action: DockAction, slot: androidx.compose.ui.unit.Dp) {
  */
 @Composable
 private fun StyleBar(
-    active: (NoteStyle) -> Boolean,
+    active: Int,
     onToggle: (NoteStyle) -> Unit,
 ) {
     val haptics = LocalHapticFeedback.current
     Column(
-        modifier = Modifier.padding(end = 8.dp, top = 4.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        modifier = Modifier.fillMaxHeight().padding(end = 4.dp, bottom = 4.dp),
+        // At the bottom, next to the thumb and next to everything else that
+        // is reached by hand. It rides up with the keyboard because the
+        // whole column does.
+        verticalArrangement = Arrangement.Bottom,
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         for (kind in STYLE_BUTTONS) {
-            val on = active(kind)
+            val on = active and kind.bit != 0
             Surface(
                 shape = CircleShape,
                 color = if (on) {
-                    MaterialTheme.colorScheme.secondaryContainer
+                    MaterialTheme.colorScheme.primary
                 } else {
-                    MaterialTheme.colorScheme.surfaceContainerHigh
+                    MaterialTheme.colorScheme.surfaceContainerHighest
                 },
                 contentColor = if (on) {
-                    MaterialTheme.colorScheme.onSecondaryContainer
+                    MaterialTheme.colorScheme.onPrimary
                 } else {
                     MaterialTheme.colorScheme.onSurfaceVariant
                 },
                 modifier = Modifier
+                    .padding(top = 8.dp)
                     .size(44.dp)
-                    .clickable {
-                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        onToggle(kind)
+                    // Not clickable: a clickable takes the focus, the text
+                    // field loses it, and a selection that is no longer
+                    // focused collapses to a cursor. The button then had
+                    // nothing to style. A raw tap detector asks for no
+                    // focus, so the selection stays exactly as it was.
+                    .pointerInput(kind) {
+                        detectTapGestures {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            onToggle(kind)
+                        }
                     },
             ) {
                 Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
@@ -630,7 +681,7 @@ private fun StyleBar(
     }
 }
 
-private val STYLE_BUTTONS = listOf(
+val STYLE_BUTTONS = listOf(
     NoteStyle.BOLD,
     NoteStyle.ITALIC,
     NoteStyle.MONOSPACE,
@@ -710,6 +761,27 @@ private fun EditorField(
 }
 
 /**
+ * One of the three areas of the editor: the date, the note itself, the
+ * title. Same rounded container as a card on the wall, and it carries the
+ * note's colour, which is why the page behind them is plain.
+ */
+@Composable
+private fun EditorZone(
+    color: Color,
+    modifier: Modifier = Modifier,
+    content: @Composable () -> Unit,
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = color,
+        contentColor = noteContentColor(),
+    ) {
+        content()
+    }
+}
+
+/**
  * The creation date, centred at the top of the note.
  *
  * Resting, it shows the date in whatever format the settings ask for.
@@ -731,14 +803,15 @@ private fun DateField(
         value = if (editing) text else shown.orEmpty(),
         onValueChange = onTextChange,
         singleLine = true,
-        textStyle = MaterialTheme.typography.labelLarge.copy(
+        // Small on purpose. It is the note's date, not its heading.
+        textStyle = MaterialTheme.typography.labelSmall.copy(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
             textAlign = TextAlign.Center,
         ),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 6.dp)
+            .padding(horizontal = 16.dp, vertical = 8.dp)
             .onFocusChanged { state -> onFocus(state.isFocused) },
     )
 }

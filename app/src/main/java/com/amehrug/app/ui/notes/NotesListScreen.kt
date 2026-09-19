@@ -8,9 +8,11 @@ import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.WindowInsetsSides
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.only
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
@@ -25,6 +27,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.Button
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -312,6 +315,24 @@ fun NotesListScreen(
                         modifier = Modifier.align(Alignment.BottomCenter),
                     )
                 } else {
+                    if (folder == Folder.DELETED && notes.isNotEmpty()) {
+                        // On the right, clear of the dock, so emptying the
+                        // bin is never a neighbour of a button pressed by
+                        // habit.
+                        Button(
+                            onClick = { asking = Ask.EMPTY },
+                            modifier = Modifier
+                                .align(Alignment.BottomEnd)
+                                .windowInsetsPadding(
+                                    WindowInsets.safeDrawing.only(
+                                        WindowInsetsSides.Horizontal + WindowInsetsSides.Bottom,
+                                    ),
+                                )
+                                .padding(end = 16.dp, bottom = 88.dp),
+                        ) {
+                            Text(stringResource(R.string.action_empty_trash))
+                        }
+                    }
                     NoteDock(
                         order = dockOrder,
                         columns = columns,
@@ -365,6 +386,14 @@ fun NotesListScreen(
         onClose = { asking = Ask.NONE },
         onColor = { color -> act { repository.setColor(ids, color) } },
         onLabel = { name, on -> scope.launch { repository.setLabel(ids, name, on) } },
+        onEmpty = {
+            // Everything in the bin, not just what is selected.
+            val targets = notes.map { it.id }
+            act {
+                val files = repository.deleteForever(targets)
+                for (file in files) AppGraph.attachments.delete(file)
+            }
+        },
         onDelete = {
             val targets = ids
             act {
@@ -375,7 +404,7 @@ fun NotesListScreen(
     )
 }
 
-private enum class Ask { NONE, COLOR, LABELS, DELETE }
+private enum class Ask { NONE, COLOR, LABELS, DELETE, EMPTY }
 
 private fun toggle(selected: Set<Long>, id: Long): Set<Long> =
     if (id in selected) selected - id else selected + id
@@ -516,6 +545,7 @@ private fun Dialogs(
     onColor: (com.amehrug.app.model.NoteColor) -> Unit,
     onLabel: (String, Boolean) -> Unit,
     onDelete: () -> Unit,
+    onEmpty: () -> Unit,
 ) {
     when (asking) {
         Ask.NONE -> Unit
@@ -531,6 +561,12 @@ private fun Dialogs(
             title = R.string.action_delete_forever,
             message = R.string.delete_forever_message,
             onConfirm = onDelete,
+            onDismiss = onClose,
+        )
+        Ask.EMPTY -> ConfirmDialog(
+            title = R.string.action_empty_trash,
+            message = R.string.empty_trash_message,
+            onConfirm = onEmpty,
             onDismiss = onClose,
         )
     }
