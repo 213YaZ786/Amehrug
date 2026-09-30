@@ -1,28 +1,27 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!--
-  A page with a folded corner and a small padlock.
-
-  Every fill is a system palette colour rather than a fixed paint, so the
-  icon takes its colours from the wallpaper like the rest of the app. These
-  resources were added to the framework in API 31 and minSdk is 31, so they
-  always resolve. On a phone with no wallpaper palette the framework falls
-  back to its own default tones, and the icon still reads.
+  A page with a folded corner, written in binary, and a padlock, in soft
+  relief. Each material is a grey layer multiplied by a tone of the
+  wallpaper's palette (colors.xml), so the icon follows Material You. The
+  shadows and the highlights lie on top, untinted. Rendered by a script,
+  never edited by hand.
 -->
-<vector xmlns:android="http://schemas.android.com/apk/res/android"
-    android:width="108dp"
-    android:height="108dp"
-    android:viewportWidth="108"
-    android:viewportHeight="108">
-    <path
-        android:fillColor="@android:color/system_accent1_10"
-        android:pathData="M38,30h24l12,12v34a4,4 0,0 1,-4 4h-32a4,4 0,0 1,-4 -4v-42a4,4 0,0 1,4 -4z" />
-    <path
-        android:fillColor="@android:color/system_accent2_200"
-        android:pathData="M62,30v8a4,4 0,0 0,4 4h8z" />
-    <path
-        android:fillColor="@android:color/system_accent1_700"
-        android:pathData="M42,46h18v3h-18z M42,53h24v3h-24z" />
-    <path
-        android:fillColor="@android:color/system_accent1_600"
-        android:pathData="M48,66a6,6 0,0 1,12 0v2h-2.5v-2a3.5,3.5 0,0 0,-7 0v2h-2.5z M46,68h16v9a1,1 0,0 1,-1 1h-14a1,1 0,0 1,-1 -1z" />
-</vector>
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <bitmap android:src="@drawable/ame_page" android:tint="@color/ic_launcher_page" android:tintMode="multiply" />
+    </item>
+    <item android:drawable="@drawable/ame_shadow" />
+    <item>
+        <bitmap android:src="@drawable/ame_lines" android:tint="@color/ic_launcher_ink" android:tintMode="multiply" />
+    </item>
+    <item>
+        <bitmap android:src="@drawable/ame_fold" android:tint="@color/ic_launcher_fold" android:tintMode="multiply" />
+    </item>
+    <item>
+        <bitmap android:src="@drawable/ame_shackle" android:tint="@color/ic_launcher_shackle" android:tintMode="multiply" />
+    </item>
+    <item>
+        <bitmap android:src="@drawable/ame_lock" android:tint="@color/ic_launcher_lock" android:tintMode="multiply" />
+    </item>
+    <item android:drawable="@drawable/ame_shine" />
+</layer-list>
