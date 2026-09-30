@@ -29,6 +29,10 @@ fun FloatingSurface(
     elevation: Dp = 3.dp,
     /** A control that carries the accent, like the selection bar. */
     accent: Boolean = false,
+    /** How strongly the edges bend what lies under them, 1 being the dock's. */
+    lens: Float = 1f,
+    /** How much of the tint the glass keeps, 1 being the dock's; less is clearer. */
+    clarity: Float = 1f,
     content: @Composable () -> Unit,
 ) {
     val look = LocalGlass.current
@@ -37,11 +41,12 @@ fun FloatingSurface(
         return
     }
     val backdrop = LocalGlassBackdrop.current
-    val tint = if (accent) look.accentTint else look.floatTint
+    val base = if (accent) look.accentTint else look.floatTint
+    val tint = base.copy(alpha = base.alpha * clarity)
     val glass = if (backdrop != null) {
-        modifier.glassFloating(backdrop, shape, look, tint)
+        modifier.glassFloating(backdrop, shape, look, tint, lens)
     } else {
-        modifier.glassZone(shape, look, lens = 1f)
+        modifier.glassZone(shape, look, lens = lens)
     }
     Surface(
         modifier = glass,

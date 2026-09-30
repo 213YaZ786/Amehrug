@@ -460,6 +460,10 @@ private fun NotesSearchBar(
             // stretching into a banner.
             modifier = Modifier.fillMaxWidth().widthIn(max = 720.dp),
             elevation = 0.dp,
+            // Clearer and more strongly bent than the dock, so the pill
+            // reads as glass even with nothing scrolled under it yet.
+            lens = 1.7f,
+            clarity = 0.55f,
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp),

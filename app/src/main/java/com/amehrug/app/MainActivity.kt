@@ -1,10 +1,12 @@
 package com.amehrug.app
 
+import androidx.compose.foundation.layout.Row
+import com.amehrug.app.ui.NavRail
+import com.amehrug.app.ui.RailItem
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DrawerDefaults
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import com.amehrug.app.ui.glass.LocalGlass
 import com.amehrug.app.ui.glass.glassGround
 import com.amehrug.app.ui.glass.glassZone
@@ -41,8 +43,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.NavigationDrawerItem
-import androidx.compose.material3.PermanentDrawerSheet
-import androidx.compose.material3.PermanentNavigationDrawer
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberDrawerState
@@ -378,22 +378,29 @@ private fun AmehrugRoot(settings: AppSettings) {
     }
 
     BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        // A drawer that has to be pulled open every time wastes a tablet.
-        // Past 840dp it stays on screen instead, which is where Material
-        // puts the boundary between a phone layout and an expanded one.
-        if (maxWidth >= 840.dp) {
-            PermanentNavigationDrawer(
-                drawerContent = {
-                    val look = LocalGlass.current
-                    PermanentDrawerSheet(
-                        modifier = Modifier.width(300.dp)
-                            .then(if (look != null) Modifier.glassZone(RectangleShape, look) else Modifier),
-                        drawerContainerColor = if (look != null) Color.Transparent else DrawerDefaults.standardContainerColor,
-                        drawerTonalElevation = if (look != null) 0.dp else DrawerDefaults.PermanentDrawerElevation,
-                    ) { drawerContent() }
-                },
-            ) {
-                body(false)
+        // A drawer that has to be pulled open every time wastes a tablet,
+        // and one that stays open keeps a third of it for five rows. From
+        // 600dp, Material's medium width, a slim rail of icons stays on
+        // screen instead.
+        if (maxWidth >= 600.dp) {
+            Row(modifier = Modifier.fillMaxSize()) {
+                NavRail(
+                    selected = when {
+                        screenName == SETTINGS || screenName == DIAGNOSTICS -> RailItem.SETTINGS
+                        labelFilter.isNotEmpty() -> RailItem.LABELS
+                        folder == Folder.ARCHIVED -> RailItem.ARCHIVE
+                        folder == Folder.DELETED -> RailItem.TRASH
+                        else -> RailItem.NOTES
+                    },
+                    labels = labels,
+                    activeLabel = labelFilter,
+                    onNotes = { folderName = Folder.NOTES.name; labelFilter = ""; screenName = NOTES },
+                    onArchive = { folderName = Folder.ARCHIVED.name; labelFilter = ""; screenName = NOTES },
+                    onTrash = { folderName = Folder.DELETED.name; labelFilter = ""; screenName = NOTES },
+                    onLabel = { label -> labelFilter = label; folderName = Folder.NOTES.name; screenName = NOTES },
+                    onSettings = { screenName = SETTINGS },
+                )
+                Box(modifier = Modifier.weight(1f).fillMaxHeight()) { body(false) }
             }
         } else {
             ModalNavigationDrawer(
