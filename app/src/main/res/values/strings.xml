@@ -159,4 +159,6 @@
     <string name="export_markdown">Markdown (.md)</string>
     <string name="export_done">Exported.</string>
     <string name="export_failed">That export could not be written.</string>
+    <string name="settings_glass">Glass effects</string>
+    <string name="settings_troubleshooting">Troubleshooting</string>
 </resources>

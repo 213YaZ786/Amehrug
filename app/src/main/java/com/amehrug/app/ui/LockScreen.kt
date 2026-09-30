@@ -1,5 +1,6 @@
 package com.amehrug.app.ui
 
+import androidx.compose.ui.graphics.Color
 import android.app.Activity
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -57,7 +58,7 @@ fun LockScreen(method: LockMethod, onUnlocked: () -> Unit) {
     // Asked once when the screen appears, then on the button.
     LaunchedEffect(Unit) { ask() }
 
-    Scaffold(modifier = Modifier.fillMaxSize()) { insets ->
+    Scaffold(modifier = Modifier.fillMaxSize(), containerColor = Color.Transparent) { insets ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

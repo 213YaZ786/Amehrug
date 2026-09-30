@@ -27,6 +27,8 @@ class SettingsRepository(database: AmehrugDatabase) {
     suspend fun setNoteTimestamp(format: NoteTimestamp) =
         put(SettingsCodec.encodeNoteTimestamp(format))
 
+    suspend fun setGlass(on: Boolean) = put(SettingsCodec.encodeGlass(on))
+
     suspend fun setDockOrder(order: List<DockItem>) = put(SettingsCodec.encodeDockOrder(order))
 
     /**

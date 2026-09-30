@@ -1,5 +1,6 @@
 package com.amehrug.app.ui
 
+import com.amehrug.app.ui.component.ZoneAlertDialog
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -204,7 +205,7 @@ private fun PasswordDialog(
     val matching = !confirmField || password == again
     val ready = longEnough && matching
 
-    AlertDialog(
+    ZoneAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {

@@ -1,5 +1,10 @@
 package com.amehrug.app.ui.notes
 
+import androidx.compose.foundation.background
+import androidx.compose.ui.graphics.Color
+import com.amehrug.app.model.NoteColor
+import com.amehrug.app.ui.glass.LocalGlass
+import com.amehrug.app.ui.glass.glassZone
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.Spring
@@ -48,6 +53,9 @@ private const val PREVIEW_LINES = 8
 private const val PREVIEW_ITEMS = 6
 
 private val CARD_CORNER = 22.dp
+
+/** How much of its colour a coloured note lays over the glass. */
+internal const val NOTE_WASH = 0.6f
 private val RESTING_OUTLINE = 2.dp
 private val SELECTED_OUTLINE = 3.5.dp
 
@@ -95,12 +103,22 @@ fun NoteCard(
         targetValue = if (selected) SELECTED_OUTLINE else RESTING_OUTLINE,
         label = "card outline width",
     )
-    val resting = noteOutlineColor(note.color)
+    // In glass the rim draws the edge of a resting card, so its outline
+    // fades out and only comes back to mark a selected one.
+    val glass = LocalGlass.current
+    val resting = if (glass != null) Color.Transparent else noteOutlineColor(note.color)
     val borderColor by animateColorAsState(
         targetValue = if (selected) MaterialTheme.colorScheme.primary else resting,
         label = "card outline colour",
     )
     val shape = RoundedCornerShape(CARD_CORNER)
+    // A coloured note is glass washed with its colour, a plain one is clear glass.
+    val tint = noteContainerColor(note.color)
+    val pane = when {
+        glass == null -> Modifier
+        note.color == NoteColor.DEFAULT -> Modifier.glassZone(shape, glass)
+        else -> Modifier.glassZone(shape, glass).background(tint.copy(alpha = NOTE_WASH), shape)
+    }
     Card(
         modifier = modifier
             .fillMaxWidth()
@@ -108,10 +126,11 @@ fun NoteCard(
                 scaleX = scale.value
                 scaleY = scale.value
                 rotationZ = tilt.value
-            },
+            }
+            .then(pane),
         shape = shape,
         colors = CardDefaults.cardColors(
-            containerColor = noteContainerColor(note.color),
+            containerColor = if (glass != null) Color.Transparent else tint,
             contentColor = noteContentColor(),
         ),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),

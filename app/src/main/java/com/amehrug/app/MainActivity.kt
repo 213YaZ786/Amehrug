@@ -1,5 +1,14 @@
 package com.amehrug.app
 
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DrawerDefaults
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
+import com.amehrug.app.ui.glass.LocalGlass
+import com.amehrug.app.ui.glass.glassGround
+import com.amehrug.app.ui.glass.glassZone
+import com.amehrug.app.ui.glass.rememberGlassLook
 import android.os.Bundle
 import android.os.Process
 import android.os.SystemClock
@@ -149,6 +158,13 @@ private fun AmehrugApp() {
     }
     val locked by AppGraph.lock.locked.collectAsState()
 
+    // Glass over Material You: the look for this theme, or none when the
+    // user turned it off, and the page's ground with its ambient light under
+    // every screen. Until the settings are read, glass is on, its default.
+    val glassOn = (state as? SettingsState.Ready)?.settings?.glass ?: true
+    val look = rememberGlassLook(MaterialTheme.colorScheme, glassOn)
+    CompositionLocalProvider(LocalGlass provides look) {
+    Box(Modifier.fillMaxSize().glassGround(look, MaterialTheme.colorScheme.background)) {
     when (val current = state) {
         SettingsState.Loading -> MessageScreen(stringResource(R.string.opening))
         // Nothing is shown when the settings cannot be read: the lock state
@@ -163,6 +179,8 @@ private fun AmehrugApp() {
             } else {
                 AmehrugRoot(current.settings)
             }
+    }
+    }
     }
 }
 
@@ -206,8 +224,11 @@ private fun AmehrugRoot(settings: AppSettings) {
     }
 
     // The editor handles its own back, because it has to write the note
-    // first. Everything else just goes home.
-    BackHandler(enabled = screenName != NOTES && screenName != EDITOR) { screenName = NOTES }
+    // first. The diagnostic log goes back to the settings it lives in,
+    // everything else just goes home.
+    BackHandler(enabled = screenName != NOTES && screenName != EDITOR) {
+        screenName = if (screenName == DIAGNOSTICS) SETTINGS else NOTES
+    }
 
     // One number the diagnostic log can be read for, when a bar looks like
     // it is sitting under the status bar. Zero here means the window is not
@@ -219,8 +240,8 @@ private fun AmehrugRoot(settings: AppSettings) {
         Diagnostics.log.info("insets", "safe drawing top $safeTop px")
     }
 
-    // The sheet scrolls. Without it, a few labels push Settings and
-    // Diagnostics off the bottom of the screen, where nothing can reach them.
+    // The sheet scrolls. Without it, a few labels push Settings off the
+    // bottom of the screen, where nothing can reach it.
     val drawerContent: @Composable () -> Unit = {
         // Centred when it fits, scrolling when it does not. The name of the
         // app is not repeated here: it is the only app on this screen.
@@ -281,10 +302,6 @@ private fun AmehrugRoot(settings: AppSettings) {
                 }
                 DrawerRow(R.string.settings_title, R.drawable.ic_settings, screenName == SETTINGS) {
                     screenName = SETTINGS
-                    scope.launch { drawer.close() }
-                }
-                DrawerRow(R.string.diagnostics_title, R.drawable.ic_bug, screenName == DIAGNOSTICS) {
-                    screenName = DIAGNOSTICS
                     scope.launch { drawer.close() }
                 }
             }
@@ -350,8 +367,12 @@ private fun AmehrugRoot(settings: AppSettings) {
                     timestamp = settings.noteTimestamp,
                     onClose = { screenName = NOTES },
                 )
-                Screen.Settings -> SettingsScreen(settings = settings, onBack = { screenName = NOTES })
-                Screen.Diagnostics -> DiagnosticsScreen(onBack = { screenName = NOTES })
+                Screen.Settings -> SettingsScreen(
+                    settings = settings,
+                    onBack = { screenName = NOTES },
+                    onDiagnostics = { screenName = DIAGNOSTICS },
+                )
+                Screen.Diagnostics -> DiagnosticsScreen(onBack = { screenName = SETTINGS })
             }
         }
     }
@@ -363,7 +384,13 @@ private fun AmehrugRoot(settings: AppSettings) {
         if (maxWidth >= 840.dp) {
             PermanentNavigationDrawer(
                 drawerContent = {
-                    PermanentDrawerSheet(modifier = Modifier.width(300.dp)) { drawerContent() }
+                    val look = LocalGlass.current
+                    PermanentDrawerSheet(
+                        modifier = Modifier.width(300.dp)
+                            .then(if (look != null) Modifier.glassZone(RectangleShape, look) else Modifier),
+                        drawerContainerColor = if (look != null) Color.Transparent else DrawerDefaults.standardContainerColor,
+                        drawerTonalElevation = if (look != null) 0.dp else DrawerDefaults.PermanentDrawerElevation,
+                    ) { drawerContent() }
                 },
             ) {
                 body(false)
@@ -372,7 +399,16 @@ private fun AmehrugRoot(settings: AppSettings) {
             ModalNavigationDrawer(
                 drawerState = drawer,
                 gesturesEnabled = screenName == NOTES,
-                drawerContent = { ModalDrawerSheet { drawerContent() } },
+                drawerContent = {
+                    val look = LocalGlass.current
+                    val shape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
+                    ModalDrawerSheet(
+                        modifier = if (look != null) Modifier.glassZone(shape, look) else Modifier,
+                        drawerShape = shape,
+                        drawerContainerColor = if (look != null) Color.Transparent else DrawerDefaults.modalContainerColor,
+                        drawerTonalElevation = if (look != null) 0.dp else DrawerDefaults.ModalDrawerElevation,
+                    ) { drawerContent() }
+                },
             ) {
                 body(true)
             }
@@ -405,7 +441,7 @@ private fun DrawerRow(label: String, icon: Int, selected: Boolean, onClick: () -
 
 @Composable
 private fun MessageScreen(message: String) {
-    Scaffold(modifier = Modifier.fillMaxSize()) { insets ->
+    Scaffold(modifier = Modifier.fillMaxSize(), containerColor = Color.Transparent) { insets ->
         Column(
             modifier = Modifier
                 .fillMaxSize()

@@ -120,4 +120,6 @@
     <string name="attachment_remove">Supprimer</string>
     <string name="attachment_no_player">La lecture des enregistrements viendra plus tard. Le fichier est conservé, chiffré.</string>
     <string name="attachment_failed">Cette image n\'a pas pu être ajoutée.</string>
+    <string name="settings_glass">Effets verre</string>
+    <string name="settings_troubleshooting">Dépannage</string>
 </resources>

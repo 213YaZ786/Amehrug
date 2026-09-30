@@ -1,5 +1,7 @@
 package com.amehrug.app.diagnostics
 
+import androidx.compose.material3.TopAppBarDefaults
+import androidx.compose.ui.graphics.Color
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -53,9 +55,11 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.diagnostics_title)) },
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(

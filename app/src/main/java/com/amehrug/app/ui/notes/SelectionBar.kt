@@ -1,5 +1,6 @@
 package com.amehrug.app.ui.notes
 
+import com.amehrug.app.ui.component.FloatingSurface
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Row
@@ -100,12 +101,10 @@ fun SelectionBar(
         // size and never below the one a thumb can still hit.
         val room = maxWidth - 12.dp - 34.dp
         val slot = (room / actions.size).coerceIn(38.dp, 46.dp)
-        Surface(
-            shape = CircleShape,
+        FloatingSurface(
             color = MaterialTheme.colorScheme.secondaryContainer,
             contentColor = MaterialTheme.colorScheme.onSecondaryContainer,
-            tonalElevation = 3.dp,
-            shadowElevation = 3.dp,
+            accent = true,
         ) {
             Row(
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),

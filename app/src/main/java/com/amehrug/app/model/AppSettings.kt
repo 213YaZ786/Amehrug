@@ -22,6 +22,8 @@ data class AppSettings(
     val lockTimeoutSeconds: Int = 60,
     val noteTimestamp: NoteTimestamp = NoteTimestamp.DATE_TIME,
     val dockOrder: List<DockItem> = DockItem.entries.toList(),
+    /** Zones and floating controls in liquid glass, over a soft light in the wallpaper's colours. */
+    val glass: Boolean = true,
 )
 
 /**
@@ -35,6 +37,7 @@ object SettingsCodec {
     const val LOCK_TIMEOUT = "lock.timeoutSeconds"
     const val DOCK_ORDER = "dock.order"
     const val NOTE_TIMESTAMP = "notes.timestamp"
+    const val GLASS = "look.glass"
 
     /**
      * When the app was last put away, on the clock that counts since the
@@ -60,6 +63,7 @@ object SettingsCodec {
             lockTimeoutSeconds = timeout,
             noteTimestamp = decodeNoteTimestamp(rows[NOTE_TIMESTAMP]),
             dockOrder = decodeDockOrder(rows[DOCK_ORDER]),
+            glass = rows[GLASS] != "false",
         )
     }
 
@@ -91,6 +95,8 @@ object SettingsCodec {
         NoteTimestamp.entries.firstOrNull { it.name == raw?.trim() } ?: AppSettings().noteTimestamp
 
     fun encodeNoteTimestamp(format: NoteTimestamp): Pair<String, String> = NOTE_TIMESTAMP to format.name
+
+    fun encodeGlass(on: Boolean): Pair<String, String> = GLASS to on.toString()
 
     fun encodeLockEnabled(enabled: Boolean): Pair<String, String> = LOCK_ENABLED to enabled.toString()
 

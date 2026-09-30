@@ -1,5 +1,7 @@
 package com.amehrug.app.ui.notes
 
+import com.amehrug.app.ui.component.FloatingSurface
+import com.amehrug.app.ui.glass.LocalGlass
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectDragGesturesAfterLongPress
@@ -60,6 +62,7 @@ fun NoteDock(
     modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
+    val glass = LocalGlass.current
     val live = remember { order.toMutableStateList() }
     // The stored order wins whenever it changes underneath, which happens
     // once at startup when the settings arrive.
@@ -87,13 +90,7 @@ fun NoteDock(
         val slot = if (maxWidth < 400.dp) 46.dp else 54.dp
         val slotPx = with(LocalDensity.current) { slot.toPx() }
 
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 3.dp,
-            shadowElevation = 3.dp,
-        ) {
+        FloatingSurface {
             Row(
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -117,10 +114,10 @@ fun NoteDock(
                                 .size(slot - 6.dp)
                                 .clip(CircleShape)
                                 .background(
-                                    if (on) {
-                                        MaterialTheme.colorScheme.secondaryContainer
-                                    } else {
-                                        Color.Transparent
+                                    when {
+                                        !on -> Color.Transparent
+                                        glass != null -> glass.accentTint
+                                        else -> MaterialTheme.colorScheme.secondaryContainer
                                     },
                                 )
                                 .clickable(enabled = dragging < 0) { onAction(item) }
@@ -172,7 +169,7 @@ fun NoteDock(
                                 painter = painterResource(dockIcon(item, columns)),
                                 contentDescription = stringResource(dockLabel(item)),
                                 tint = if (on) {
-                                    MaterialTheme.colorScheme.onSecondaryContainer
+                                    if (glass != null) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
                                 } else {
                                     MaterialTheme.colorScheme.onSurfaceVariant
                                 },

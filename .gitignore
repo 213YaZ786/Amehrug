@@ -1,0 +1,18 @@
+# Android Studio and IntelliJ
+.idea/
+*.iml
+.kotlin/
+
+# Gradle and build output
+.gradle/
+build/
+local.properties
+captures/
+
+# Keys and secrets. Signing comes from environment variables, never a file
+# in the repository.
+*.jks
+*.keystore
+
+# OS noise
+.DS_Store

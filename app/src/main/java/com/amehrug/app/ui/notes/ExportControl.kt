@@ -1,5 +1,6 @@
 package com.amehrug.app.ui.notes
 
+import com.amehrug.app.ui.component.ZoneAlertDialog
 import android.net.Uri
 import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -101,7 +102,7 @@ fun ExportControl(visible: Boolean, notes: () -> List<Note>, onDismiss: () -> Un
 
     if (!visible) return
 
-    AlertDialog(
+    ZoneAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.export_title)) },
         confirmButton = {

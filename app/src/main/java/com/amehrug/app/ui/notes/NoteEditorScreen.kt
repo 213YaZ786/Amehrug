@@ -1,5 +1,9 @@
 package com.amehrug.app.ui.notes
 
+import androidx.compose.foundation.background
+import com.amehrug.app.ui.component.FloatingSurface
+import com.amehrug.app.ui.glass.LocalGlass
+import com.amehrug.app.ui.glass.glassZone
 import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -305,7 +309,7 @@ fun NoteEditorScreen(
         modifier = Modifier.fillMaxSize(),
         // The page behind is plain. The note's colour belongs to the zones,
         // the way it belongs to a card on the wall rather than to the wall.
-        containerColor = MaterialTheme.colorScheme.surface,
+        containerColor = Color.Transparent,
         // safeDrawing so the keyboard counts as an edge. Everything that is
         // reached by hand lives at the bottom of this screen, so it has to
         // ride above the keyboard rather than under it.
@@ -554,13 +558,7 @@ private fun EditorDock(
         contentAlignment = Alignment.BottomCenter,
     ) {
         val slot = ((maxWidth - 36.dp) / actions.size).coerceIn(38.dp, 50.dp)
-        Surface(
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            tonalElevation = 3.dp,
-            shadowElevation = 3.dp,
-        ) {
+        FloatingSurface {
             Row(
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -590,7 +588,7 @@ private fun DockButton(action: DockAction, slot: androidx.compose.ui.unit.Dp) {
         Surface(
             shape = CircleShape,
             color = if (action.on) {
-                MaterialTheme.colorScheme.secondaryContainer
+                LocalGlass.current?.accentTint ?: MaterialTheme.colorScheme.secondaryContainer
             } else {
                 Color.Transparent
             },
@@ -794,10 +792,19 @@ private fun EditorZone(
     modifier: Modifier = Modifier,
     content: @Composable () -> Unit,
 ) {
+    val glass = LocalGlass.current
+    val shape = RoundedCornerShape(22.dp)
+    // In glass the zone is clear glass, washed with the note's colour when
+    // it has one, like its card on the wall.
+    val pane = when {
+        glass == null -> modifier
+        color == MaterialTheme.colorScheme.surfaceContainerLow -> modifier.glassZone(shape, glass)
+        else -> modifier.glassZone(shape, glass).background(color.copy(alpha = NOTE_WASH), shape)
+    }
     Surface(
-        modifier = modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(22.dp),
-        color = color,
+        modifier = pane.fillMaxWidth(),
+        shape = shape,
+        color = if (glass == null) color else Color.Transparent,
         contentColor = noteContentColor(),
     ) {
         content()

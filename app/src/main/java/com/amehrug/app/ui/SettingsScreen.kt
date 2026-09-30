@@ -1,5 +1,8 @@
 package com.amehrug.app.ui
 
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.amehrug.app.ui.component.ZoneAlertDialog
+import com.amehrug.app.ui.component.ZoneSurface
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -64,7 +67,7 @@ import kotlinx.coroutines.launch
  */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsScreen(settings: AppSettings, onBack: () -> Unit) {
+fun SettingsScreen(settings: AppSettings, onBack: () -> Unit, onDiagnostics: () -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val canLock = remember { AppLock.available(context) }
@@ -73,6 +76,7 @@ fun SettingsScreen(settings: AppSettings, onBack: () -> Unit) {
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
+        containerColor = Color.Transparent,
         topBar = {
             TopAppBar(
                 title = {},
@@ -115,6 +119,16 @@ fun SettingsScreen(settings: AppSettings, onBack: () -> Unit) {
                     },
                     onPick = { format -> scope.launch { repository.setNoteTimestamp(format) } },
                 )
+                SettingRow(
+                    title = stringResource(R.string.settings_glass),
+                    subtitle = null,
+                    onClick = { scope.launch { repository.setGlass(!settings.glass) } },
+                ) {
+                    Switch(
+                        checked = settings.glass,
+                        onCheckedChange = { on -> scope.launch { repository.setGlass(on) } },
+                    )
+                }
             }
 
             SectionHeader(stringResource(R.string.settings_security))
@@ -186,6 +200,25 @@ fun SettingsScreen(settings: AppSettings, onBack: () -> Unit) {
                 }
             }
 
+            // For reporting a problem, not for everyday use: folded away at
+            // the very end, one tap opens it.
+            var troubleshooting by rememberSaveable { mutableStateOf(false) }
+            Spacer(modifier = Modifier.height(24.dp))
+            SettingsCard {
+                SettingRow(
+                    title = stringResource(R.string.settings_troubleshooting),
+                    subtitle = null,
+                    onClick = { troubleshooting = !troubleshooting },
+                ) {}
+                if (troubleshooting) {
+                    SettingRow(
+                        title = stringResource(R.string.diagnostics_title),
+                        subtitle = null,
+                        onClick = onDiagnostics,
+                    ) {}
+                }
+            }
+
             Spacer(modifier = Modifier.height(24.dp))
         }
     }
@@ -204,11 +237,9 @@ private fun SectionHeader(text: String) {
 /** The container a section's rows sit in. */
 @Composable
 private fun SettingsCard(content: @Composable ColumnScope.() -> Unit) {
-    Surface(
+    ZoneSurface(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(24.dp),
-        color = MaterialTheme.colorScheme.surfaceContainerLow,
-        contentColor = MaterialTheme.colorScheme.onSurface,
     ) {
         Column(modifier = Modifier.fillMaxWidth(), content = content)
     }
@@ -306,7 +337,7 @@ private fun <T> ChoiceDialog(
     onPick: (T) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    AlertDialog(
+    ZoneAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         confirmButton = {

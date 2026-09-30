@@ -1,5 +1,6 @@
 package com.amehrug.app.ui.notes
 
+import com.amehrug.app.ui.component.ZoneAlertDialog
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -38,7 +39,7 @@ import com.amehrug.app.ui.theme.noteContainerColor
 /** The colour grid, shown for one or for many notes at once. */
 @Composable
 fun ColorDialog(onDismiss: () -> Unit, onPick: (NoteColor) -> Unit) {
-    AlertDialog(
+    ZoneAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.action_color)) },
         text = {
@@ -90,7 +91,7 @@ fun LabelDialog(
     onDismiss: () -> Unit,
 ) {
     var newLabel by remember { mutableStateOf("") }
-    AlertDialog(
+    ZoneAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(R.string.action_labels)) },
         text = {
@@ -137,7 +138,7 @@ fun LabelDialog(
 /** Used for deleting for good, which nothing can undo. */
 @Composable
 fun ConfirmDialog(title: Int, message: Int, onConfirm: () -> Unit, onDismiss: () -> Unit) {
-    AlertDialog(
+    ZoneAlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(stringResource(title)) },
         text = { Text(stringResource(message)) },

@@ -1,5 +1,12 @@
 package com.amehrug.app.ui.notes
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
+import com.amehrug.app.ui.component.FloatingSurface
+import com.amehrug.app.ui.glass.LocalGlass
+import com.amehrug.app.ui.glass.LocalGlassBackdrop
+import com.amehrug.app.ui.glass.glassSource
+import com.amehrug.app.ui.glass.rememberGlassBackdrop
 import androidx.compose.foundation.gestures.scrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -168,8 +175,14 @@ fun NotesListScreen(
             else -> columns
         }
 
+        // What scrolls under the search pill, the dock and the selection bar,
+        // recorded for them to bend when glass is on.
+        val look = LocalGlass.current
+        val backdrop = rememberGlassBackdrop()
+        CompositionLocalProvider(LocalGlassBackdrop provides backdrop.takeIf { look != null }) {
         Scaffold(
             modifier = Modifier.fillMaxSize(),
+            containerColor = Color.Transparent,
             contentWindowInsets = WindowInsets.safeDrawing,
             topBar = {
                 NotesSearchBar(
@@ -183,6 +196,11 @@ fun NotesListScreen(
             },
         ) { insets ->
             Box(modifier = Modifier.fillMaxSize()) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .then(if (look != null) Modifier.glassSource(backdrop, look) else Modifier),
+                ) {
                 if (notes.isEmpty()) {
                     EmptyState(folder = folder, searching = query.isNotBlank(), modifier = Modifier.padding(insets))
                 } else {
@@ -291,6 +309,7 @@ fun NotesListScreen(
                         }
                     }
                 }
+                }
 
                 // The dock floats over the wall, so the grid keeps its
                 // full height and cards pass under the pill. While notes are
@@ -352,6 +371,7 @@ fun NotesListScreen(
                     )
                 }
             }
+        }
         }
     }
 
@@ -435,13 +455,11 @@ private fun NotesSearchBar(
             .padding(horizontal = 12.dp, vertical = 8.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Surface(
+        FloatingSurface(
             // Capped, so the pill stays a pill on a tablet instead of
             // stretching into a banner.
             modifier = Modifier.fillMaxWidth().widthIn(max = 720.dp),
-            shape = CircleShape,
-            color = MaterialTheme.colorScheme.surfaceContainerHigh,
-            contentColor = MaterialTheme.colorScheme.onSurface,
+            elevation = 0.dp,
         ) {
             Row(
                 modifier = Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp),

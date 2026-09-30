@@ -1,5 +1,6 @@
 package com.amehrug.app.ui.notes
 
+import com.amehrug.app.ui.component.ZoneAlertDialog
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -92,7 +93,7 @@ fun AttachmentStrip(
 
     val current = opened
     if (current != null) {
-        AlertDialog(
+        ZoneAlertDialog(
             onDismissRequest = { opened = null },
             title = { Text(fileLabel(current)) },
             text = {
