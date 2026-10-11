@@ -14,7 +14,7 @@ Private notes for Android.
 - A dock you can reorder by holding a button and dragging it.
 - Material You colours from your wallpaper, and a layout that spreads out on
   a tablet or an unfolded screen.
-- No permission at all. 
+- One permission, for the system unlock prompt of the lock. No internet.
 - Bold, italic, monospace and strikethrough, applied to a selection or armed
   before typing. Styles from an imported Notally note are kept.
 - Export to TXT or Markdown, from an open note or from a selection on the
