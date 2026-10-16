@@ -14,8 +14,8 @@ android {
         applicationId = "com.amehrug.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 46
-        versionName = "0.24.3"
+        versionCode = 47
+        versionName = "0.24.4"
     }
 
     // Signing comes from the environment, so no key and no password is ever
