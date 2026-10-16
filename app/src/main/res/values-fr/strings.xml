@@ -69,6 +69,7 @@
     <string name="action_new_list">Nouvelle liste</string>
     <string name="action_pin">Épingler</string>
     <string name="action_color">Couleur</string>
+    <string name="action_styles">Styles du texte</string>
     <string name="action_archive">Archiver</string>
     <string name="action_delete">Mettre à la corbeille</string>
     <string name="action_remove_item">Supprimer cette ligne</string>

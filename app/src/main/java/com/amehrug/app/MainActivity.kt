@@ -1,8 +1,6 @@
 package com.amehrug.app
 
 import androidx.compose.foundation.layout.Row
-import com.amehrug.app.ui.NavRail
-import com.amehrug.app.ui.RailItem
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.DrawerDefaults
 import androidx.compose.runtime.CompositionLocalProvider
@@ -85,7 +83,10 @@ class MainActivity : ComponentActivity() {
         // Hides notes from screenshots, screen recording and the recents
         // preview. Always on for now. Roadmap task 19 turns it into a
         // setting that stays on by default.
-        window.setFlags(
+        // The debug build only lets screens be captured, so they can be checked on the
+        // emulator (screencap and screen tests); the release always hides them.
+        val debuggable = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+        if (!debuggable) window.setFlags(
             WindowManager.LayoutParams.FLAG_SECURE,
             WindowManager.LayoutParams.FLAG_SECURE,
         )
@@ -217,8 +218,6 @@ private fun AmehrugRoot(settings: AppSettings) {
         else -> Screen.Notes
     }
 
-    val drawer = rememberDrawerState(DrawerValue.Closed)
-    val scope = rememberCoroutineScope()
     val labels by produceState(initialValue = emptyList<String>()) {
         AppGraph.notes.observeLabels().collect { value = it }
     }
@@ -240,77 +239,7 @@ private fun AmehrugRoot(settings: AppSettings) {
         Diagnostics.log.info("insets", "safe drawing top $safeTop px")
     }
 
-    // The sheet scrolls. Without it, a few labels push Settings off the
-    // bottom of the screen, where nothing can reach it.
-    val drawerContent: @Composable () -> Unit = {
-        // Centred when it fits, scrolling when it does not. The name of the
-        // app is not repeated here: it is the only app on this screen.
-        Box(
-            modifier = Modifier.fillMaxHeight(),
-            contentAlignment = Alignment.Center,
-        ) {
-            Column(modifier = Modifier.verticalScroll(rememberScrollState())) {
-                DrawerRow(
-                    R.string.folder_notes,
-                    R.drawable.ic_note,
-                    screenName == NOTES && folder == Folder.NOTES && labelFilter.isEmpty(),
-                ) {
-                    folderName = Folder.NOTES.name
-                    labelFilter = ""
-                    screenName = NOTES
-                    scope.launch { drawer.close() }
-                }
-                DrawerRow(
-                    R.string.folder_archive,
-                    R.drawable.ic_archive,
-                    screenName == NOTES && folder == Folder.ARCHIVED,
-                ) {
-                    folderName = Folder.ARCHIVED.name
-                    labelFilter = ""
-                    screenName = NOTES
-                    scope.launch { drawer.close() }
-                }
-                DrawerRow(
-                    R.string.folder_trash,
-                    R.drawable.ic_delete,
-                    screenName == NOTES && folder == Folder.DELETED,
-                ) {
-                    folderName = Folder.DELETED.name
-                    labelFilter = ""
-                    screenName = NOTES
-                    scope.launch { drawer.close() }
-                }
-                if (labels.isNotEmpty()) {
-                    Text(
-                        text = stringResource(R.string.drawer_labels),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(start = 28.dp, top = 16.dp, bottom = 4.dp),
-                    )
-                    for (label in labels) {
-                        DrawerRow(
-                            label = label,
-                            icon = R.drawable.ic_label,
-                            selected = screenName == NOTES && labelFilter == label,
-                        ) {
-                            labelFilter = label
-                            folderName = Folder.NOTES.name
-                            screenName = NOTES
-                            scope.launch { drawer.close() }
-                        }
-                    }
-                }
-                DrawerRow(R.string.settings_title, R.drawable.ic_settings, screenName == SETTINGS) {
-                    screenName = SETTINGS
-                    scope.launch { drawer.close() }
-                }
-            }
-        }
-    }
-
-    // showMenu is false when the drawer is already on screen: a hamburger
-    // that opens what is open makes no sense.
-    val body: @Composable (Boolean) -> Unit = { showMenu ->
+    val body: @Composable () -> Unit = {
         // One spring for every screen change, so opening a note and coming
         // back feel like the same movement played forwards and backwards.
         AnimatedContent(
@@ -336,8 +265,9 @@ private fun AmehrugRoot(settings: AppSettings) {
                     onQueryChange = { query = it },
                     columns = columns,
                     onColumnsChange = { columns = it },
-                    onMenu = { scope.launch { drawer.open() } },
-                    showMenu = showMenu,
+                    labels = labels,
+                    onFolder = { f -> folderName = f.name; labelFilter = ""; screenName = NOTES },
+                    onLabel = { l -> labelFilter = l; folderName = Folder.NOTES.name; screenName = NOTES },
                     dockOrder = settings.dockOrder,
                     timestamp = settings.noteTimestamp,
                     onDockReorder = { order ->
@@ -377,74 +307,16 @@ private fun AmehrugRoot(settings: AppSettings) {
         }
     }
 
-    BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-        // A drawer that has to be pulled open every time wastes a tablet,
-        // and one that stays open keeps a third of it for five rows. From
-        // 600dp, Material's medium width, a slim rail of icons stays on
-        // screen instead.
-        if (maxWidth >= 600.dp) {
-            Row(modifier = Modifier.fillMaxSize()) {
-                NavRail(
-                    selected = when {
-                        screenName == SETTINGS || screenName == DIAGNOSTICS -> RailItem.SETTINGS
-                        labelFilter.isNotEmpty() -> RailItem.LABELS
-                        folder == Folder.ARCHIVED -> RailItem.ARCHIVE
-                        folder == Folder.DELETED -> RailItem.TRASH
-                        else -> RailItem.NOTES
-                    },
-                    labels = labels,
-                    activeLabel = labelFilter,
-                    onNotes = { folderName = Folder.NOTES.name; labelFilter = ""; screenName = NOTES },
-                    onArchive = { folderName = Folder.ARCHIVED.name; labelFilter = ""; screenName = NOTES },
-                    onTrash = { folderName = Folder.DELETED.name; labelFilter = ""; screenName = NOTES },
-                    onLabel = { label -> labelFilter = label; folderName = Folder.NOTES.name; screenName = NOTES },
-                    onSettings = { screenName = SETTINGS },
-                )
-                Box(modifier = Modifier.weight(1f).fillMaxHeight()) { body(false) }
-            }
-        } else {
-            ModalNavigationDrawer(
-                drawerState = drawer,
-                gesturesEnabled = screenName == NOTES,
-                drawerContent = {
-                    val look = LocalGlass.current
-                    val shape = RoundedCornerShape(topEnd = 28.dp, bottomEnd = 28.dp)
-                    ModalDrawerSheet(
-                        modifier = if (look != null) Modifier.glassZone(shape, look) else Modifier,
-                        drawerShape = shape,
-                        drawerContainerColor = if (look != null) Color.Transparent else DrawerDefaults.modalContainerColor,
-                        drawerTonalElevation = if (look != null) 0.dp else DrawerDefaults.ModalDrawerElevation,
-                    ) { drawerContent() }
-                },
-            ) {
-                body(true)
-            }
-        }
-    }
+    // No rail and no drawer, on a phone as on a tablet (the user, 2026-10-17): the
+    // places of the notes sit as round panes beside the search pill, and Notes
+    // and Settings in the dock, so the content takes the whole window.
+    body()
 }
 
 private const val NOTES = "notes"
 private const val EDITOR = "editor"
 private const val SETTINGS = "settings"
 private const val DIAGNOSTICS = "diagnostics"
-
-@Composable
-private fun DrawerRow(label: Int, icon: Int, selected: Boolean, onClick: () -> Unit) {
-    DrawerRow(stringResource(label), icon, selected, onClick)
-}
-
-@Composable
-private fun DrawerRow(label: String, icon: Int, selected: Boolean, onClick: () -> Unit) {
-    NavigationDrawerItem(
-        label = { Text(label) },
-        icon = {
-            Icon(painter = painterResource(icon), contentDescription = null)
-        },
-        selected = selected,
-        onClick = onClick,
-        modifier = Modifier.padding(horizontal = 12.dp, vertical = 2.dp),
-    )
-}
 
 @Composable
 private fun MessageScreen(message: String) {

@@ -100,6 +100,7 @@
     <string name="action_new_list">New list</string>
     <string name="action_pin">Pin</string>
     <string name="action_color">Colour</string>
+    <string name="action_styles">Text styles</string>
     <string name="action_archive">Archive</string>
     <string name="action_delete">Move to trash</string>
     <string name="action_remove_item">Remove this line</string>

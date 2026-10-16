@@ -1,0 +1,20 @@
+# The top line of the list: Archive, Trash and Settings as round panes, each touched
+# twice going back to the notes. Commands from https://docs.maestro.dev/reference/commands-available.
+appId: com.amehrug.app.debug
+---
+- launchApp
+- extendedWaitUntil:
+    visible: "Order-B"
+    timeout: 10000
+- tapOn: "Trash"
+- assertNotVisible: "Order-B"
+- tapOn: "Trash"
+- assertVisible: "Order-B"
+- tapOn: "Archive"
+- assertNotVisible: "Order-B"
+- tapOn: "Archive"
+- assertVisible: "Order-B"
+- tapOn: "Settings"
+- assertNotVisible: "Order-B"
+- back
+- assertVisible: "Order-B"

@@ -55,6 +55,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.geometry.Offset
@@ -95,8 +97,9 @@ fun NotesListScreen(
     onQueryChange: (String) -> Unit,
     columns: Int,
     onColumnsChange: (Int) -> Unit,
-    onMenu: () -> Unit,
-    showMenu: Boolean,
+    labels: List<String>,
+    onFolder: (Folder) -> Unit,
+    onLabel: (String) -> Unit,
     dockOrder: List<DockItem>,
     timestamp: NoteTimestamp,
     onDockReorder: (List<DockItem>) -> Unit,
@@ -188,9 +191,10 @@ fun NotesListScreen(
                 NotesSearchBar(
                     query = query,
                     onQueryChange = onQueryChange,
-                    onMenu = onMenu,
-                    showMenu = showMenu,
                     folder = folder,
+                    actions = {
+                        FolderActions(folder, labels, label.orEmpty(), onFolder, onLabel, onSettings)
+                    },
                     focusRequester = searchFocus,
                 )
             },
@@ -353,7 +357,8 @@ fun NotesListScreen(
                         }
                     }
                     NoteDock(
-                        order = dockOrder,
+                        // Settings has its round pane at the top (the user, 2026-10-17).
+                        order = dockOrder.filter { it != DockItem.SETTINGS },
                         columns = columns,
                         selected = if (query.isBlank()) DockItem.HOME else DockItem.SEARCH,
                         onAction = { item ->
@@ -442,23 +447,26 @@ private fun toggle(selected: Set<Long>, id: Long): Set<Long> =
 private fun NotesSearchBar(
     query: String,
     onQueryChange: (String) -> Unit,
-    onMenu: () -> Unit,
-    showMenu: Boolean,
     folder: Folder,
     focusRequester: FocusRequester,
+    actions: @Composable () -> Unit,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
-    Box(
+    // One line at the top, as the SMS app's list (Modules panes kit, FloatingTop):
+    // the search pill, then the places of the notes as round panes of glass beside
+    // it, where the side rail and the drawer were.
+    Row(
         modifier = Modifier
             .fillMaxWidth()
             .windowInsetsPadding(topBarInsets)
             .padding(horizontal = 12.dp, vertical = 8.dp),
-        contentAlignment = Alignment.Center,
+        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         FloatingSurface(
             // Capped, so the pill stays a pill on a tablet instead of
             // stretching into a banner.
-            modifier = Modifier.fillMaxWidth().widthIn(max = 720.dp),
+            modifier = Modifier.weight(1f, fill = false).widthIn(max = 720.dp).fillMaxWidth(),
             elevation = 0.dp,
             // Clearer and more strongly bent than the dock, so the pill
             // reads as glass even with nothing scrolled under it yet.
@@ -469,22 +477,11 @@ private fun NotesSearchBar(
                 modifier = Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 4.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                if (showMenu) {
-                    IconButton(onClick = onMenu) {
-                        Icon(
-                            painter = painterResource(R.drawable.ic_menu),
-                            contentDescription = stringResource(R.string.action_menu),
-                        )
-                    }
-                } else {
-                    Spacer(modifier = Modifier.width(12.dp))
-                }
+                Spacer(modifier = Modifier.width(12.dp))
                 Box(
                     modifier = Modifier.weight(1f),
-                    // Centred while empty, which is the resting state and the
-                    // one that is looked at. It moves to the start as soon as
-                    // there is text to read.
-                    contentAlignment = if (query.isEmpty()) Alignment.Center else Alignment.CenterStart,
+                    // Centred, empty and while typing alike (the user, 2026-10-17).
+                    contentAlignment = Alignment.Center,
                 ) {
                     if (query.isEmpty()) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
@@ -508,6 +505,7 @@ private fun NotesSearchBar(
                         singleLine = true,
                         textStyle = MaterialTheme.typography.bodyLarge.copy(
                             color = MaterialTheme.colorScheme.onSurface,
+                            textAlign = TextAlign.Center,
                         ),
                         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
@@ -525,6 +523,61 @@ private fun NotesSearchBar(
                 }
                 Spacer(modifier = Modifier.width(4.dp))
             }
+        }
+        actions()
+    }
+}
+
+/**
+ * Notally's places of the notes (Notes, Archived, Deleted, Labels) as round
+ * panes of glass, the one on screen in the accent; touched again it leads
+ * back to the notes. The look of Apple's Liquid Glass buttons over the
+ * content (https://developer.apple.com/design/human-interface-guidelines/materials).
+ */
+@Composable
+private fun FolderActions(
+    folder: Folder,
+    labels: List<String>,
+    activeLabel: String,
+    onFolder: (Folder) -> Unit,
+    onLabel: (String) -> Unit,
+    onSettings: () -> Unit,
+) {
+    RoundPane(R.drawable.ic_archive, R.string.folder_archive, folder == Folder.ARCHIVED) {
+        onFolder(if (folder == Folder.ARCHIVED) Folder.NOTES else Folder.ARCHIVED)
+    }
+    RoundPane(R.drawable.ic_delete, R.string.folder_trash, folder == Folder.DELETED) {
+        onFolder(if (folder == Folder.DELETED) Folder.NOTES else Folder.DELETED)
+    }
+    if (labels.isNotEmpty()) {
+        var open by remember { mutableStateOf(false) }
+        Box {
+            RoundPane(R.drawable.ic_label, R.string.drawer_labels, activeLabel.isNotEmpty()) { open = true }
+            com.amehrug.app.ui.LabelMenu(open, labels, activeLabel, onDismiss = { open = false }) { picked ->
+                open = false
+                onLabel(if (picked == activeLabel) "" else picked)
+            }
+        }
+    }
+    RoundPane(R.drawable.ic_settings, R.string.settings_title, false, onSettings)
+}
+
+/**
+ * One round pane of glass with its icon, as tall as the search pill
+ * (https://developer.apple.com/design/human-interface-guidelines/materials).
+ */
+@Composable
+private fun RoundPane(icon: Int, label: Int, on: Boolean, onClick: () -> Unit) {
+    FloatingSurface(shape = CircleShape, accent = on, elevation = 0.dp, lens = 1.7f, clarity = 0.55f) {
+        Box(
+            modifier = Modifier.size(52.dp).clip(CircleShape).clickable(onClick = onClick),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                painter = painterResource(icon),
+                contentDescription = stringResource(label),
+                tint = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

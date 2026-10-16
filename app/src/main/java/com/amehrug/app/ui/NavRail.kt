@@ -41,91 +41,9 @@ import com.amehrug.app.ui.component.FloatingSurface
 import com.amehrug.app.ui.glass.LocalGlass
 import com.amehrug.app.ui.glass.glassZone
 
-enum class RailItem { NOTES, ARCHIVE, TRASH, LABELS, SETTINGS }
-
-/**
- * The places of the app on a wide screen: a slim pill of glass down the
- * left edge, icons only, instead of a drawer that keeps a third of a tablet
- * for five rows. The labels, which can be many, open from their own button
- * in a small menu.
- */
+/** The labels, in a small menu of glass under their round pane at the top. */
 @Composable
-fun NavRail(
-    selected: RailItem,
-    labels: List<String>,
-    activeLabel: String,
-    onNotes: () -> Unit,
-    onArchive: () -> Unit,
-    onTrash: () -> Unit,
-    onLabel: (String) -> Unit,
-    onSettings: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Box(
-        modifier = modifier
-            .fillMaxHeight()
-            .windowInsetsPadding(WindowInsets.safeDrawing.only(WindowInsetsSides.Start + WindowInsetsSides.Vertical))
-            .padding(start = 12.dp, top = 12.dp, bottom = 12.dp),
-        contentAlignment = Alignment.CenterStart,
-    ) {
-        FloatingSurface(shape = RoundedCornerShape(36.dp)) {
-            Column(
-                modifier = Modifier.padding(6.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-            ) {
-                RailButton(R.drawable.ic_note, R.string.folder_notes, selected == RailItem.NOTES, onNotes)
-                RailButton(R.drawable.ic_archive, R.string.folder_archive, selected == RailItem.ARCHIVE, onArchive)
-                RailButton(R.drawable.ic_delete, R.string.folder_trash, selected == RailItem.TRASH, onTrash)
-                if (labels.isNotEmpty()) {
-                    var open by remember { mutableStateOf(false) }
-                    Box {
-                        RailButton(R.drawable.ic_label, R.string.drawer_labels, selected == RailItem.LABELS) { open = true }
-                        LabelMenu(open, labels, activeLabel, onDismiss = { open = false }) { label ->
-                            open = false
-                            onLabel(label)
-                        }
-                    }
-                }
-                Spacer(Modifier.height(8.dp))
-                RailButton(R.drawable.ic_settings, R.string.settings_title, selected == RailItem.SETTINGS, onSettings)
-            }
-        }
-    }
-}
-
-@Composable
-private fun RailButton(icon: Int, label: Int, on: Boolean, onClick: () -> Unit) {
-    val glass = LocalGlass.current
-    Box(
-        modifier = Modifier
-            .size(52.dp)
-            .clip(CircleShape)
-            .background(
-                when {
-                    !on -> Color.Transparent
-                    glass != null -> glass.accentTint
-                    else -> MaterialTheme.colorScheme.secondaryContainer
-                },
-            )
-            .clickable(onClick = onClick),
-        contentAlignment = Alignment.Center,
-    ) {
-        Icon(
-            painter = painterResource(icon),
-            contentDescription = stringResource(label),
-            tint = when {
-                !on -> MaterialTheme.colorScheme.onSurfaceVariant
-                glass != null -> MaterialTheme.colorScheme.onPrimaryContainer
-                else -> MaterialTheme.colorScheme.onSecondaryContainer
-            },
-        )
-    }
-}
-
-/** The labels, in a small menu of glass beside the rail. */
-@Composable
-private fun LabelMenu(
+internal fun LabelMenu(
     open: Boolean,
     labels: List<String>,
     active: String,

@@ -144,6 +144,7 @@ fun NoteEditorScreen(
     var type by remember(noteId) { mutableStateOf(newType) }
     val items = remember(noteId) { mutableListOf<ListItem>().toMutableStateList() }
     var showColors by remember { mutableStateOf(false) }
+    var showStyles by remember { mutableStateOf(false) }
     var showExport by remember { mutableStateOf(false) }
     val attachments = remember(noteId) { mutableListOf<Attachment>().toMutableStateList() }
     // The identifier the note ends up with. A picture cannot be attached to
@@ -205,6 +206,10 @@ fun NoteEditorScreen(
     // would each insert a row, and one note would become two.
     suspend fun store(note: Note) {
         saveLock.withLock {
+            // A note opened and left as it was keeps its date and its place in
+            // the list: written only when modified, as NotallyX's
+            // EditActivity.checkSave (isModified) does (github.com/Crustack/NotallyX).
+            if (note.copy(id = 0L) == lastWritten) return@withLock
             val target = if (savedId != 0L) note.copy(id = savedId) else note
             val id = repository.save(target)
             if (id > 0) {
@@ -392,9 +397,8 @@ fun NoteEditorScreen(
                                 modifier = Modifier
                                     .fillMaxSize()
                                     .verticalScroll(rememberScrollState())
-                                    // Clear of the buttons on the right, so no
-                                    // line of text ever runs under them.
-                                    .padding(start = 16.dp, end = 60.dp, top = 12.dp, bottom = 12.dp),
+                                    // The whole width: the styles left for the dock's Aa.
+                                    .padding(horizontal = 16.dp, vertical = 12.dp),
                                 minHeight = if (room > 0.dp) room else 0.dp,
                             )
                         }
@@ -406,7 +410,17 @@ fun NoteEditorScreen(
                         Checklist(items = items, modifier = Modifier.fillMaxSize())
                     }
                 }
-                if (type == NoteType.NOTE) {
+            }
+
+            // Everything below here is within reach of one thumb, which is
+            // the point of the layout: the styles, the colours, the title and
+            // the actions all sit under the text rather than above it. The
+            // styles unfold from the dock's Aa, as Apple Notes' Aa and Google
+            // Keep's formatting button do, so the note keeps its whole width.
+            if (type == NoteType.NOTE && showStyles) Box(
+                modifier = Modifier.fillMaxWidth(),
+                contentAlignment = Alignment.Center,
+            ) {
                     // The mask is worked out here rather than inside
                     // the bar. Handing the bar a function that reads
                     // state means the bar's own parameters never change,
@@ -433,7 +447,6 @@ fun NoteEditorScreen(
                         mask
                     }
                     StyleBar(
-                        modifier = Modifier.align(Alignment.BottomEnd),
                         active = activeStyles,
                         onToggle = { kind ->
                             val at = body.selection
@@ -455,12 +468,7 @@ fun NoteEditorScreen(
                             }
                         },
                     )
-                }
             }
-
-            // Everything below here is within reach of one thumb, which is
-            // the point of the layout: the colours, the title and the
-            // actions all sit under the text rather than above it.
             if (showColors) {
                 ColorRow(selected = color, onSelect = { color = it })
             }
@@ -480,6 +488,8 @@ fun NoteEditorScreen(
             EditorDock(
                 pinned = pinned,
                 colorsOpen = showColors,
+                stylesOpen = if (type == NoteType.NOTE) showStyles else null,
+                onStyles = { showStyles = !showStyles },
                 onBack = { leave() },
                 onPin = { pinned = !pinned },
                 onImage = {
@@ -531,6 +541,9 @@ fun NoteEditorScreen(
 private fun EditorDock(
     pinned: Boolean,
     colorsOpen: Boolean,
+    /** Null for a list, which has no styles. */
+    stylesOpen: Boolean?,
+    onStyles: () -> Unit,
     onBack: () -> Unit,
     onPin: () -> Unit,
     onImage: () -> Unit,
@@ -539,7 +552,7 @@ private fun EditorDock(
     onArchive: () -> Unit,
     onTrash: () -> Unit,
 ) {
-    val actions = listOf(
+    val actions = listOfNotNull(
         DockAction(R.drawable.ic_back, R.string.action_back, false, onBack),
         DockAction(
             if (pinned) R.drawable.ic_pin else R.drawable.ic_pin_off,
@@ -548,6 +561,8 @@ private fun EditorDock(
             onPin,
         ),
         DockAction(R.drawable.ic_add, R.string.attachment_add, false, onImage),
+        // In the middle of the dock: Aa unfolds the styles above the title.
+        stylesOpen?.let { open -> DockAction(R.drawable.ic_text_format, R.string.action_styles, open, onStyles, keepFocus = true) },
         DockAction(R.drawable.ic_palette, R.string.action_color, colorsOpen, onColors),
         DockAction(R.drawable.ic_export, R.string.action_export, false, onExport),
         DockAction(R.drawable.ic_archive, R.string.action_archive, false, onArchive),
@@ -576,6 +591,8 @@ private data class DockAction(
     val label: Int,
     val on: Boolean,
     val onClick: () -> Unit,
+    /** Touched without taking the focus, so a selection in the note stays as it is. */
+    val keepFocus: Boolean = false,
 )
 
 @Composable
@@ -599,10 +616,18 @@ private fun DockButton(action: DockAction, slot: androidx.compose.ui.unit.Dp) {
             },
             modifier = Modifier
                 .size(slot - 4.dp)
-                .clickable {
-                    haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    action.onClick()
-                },
+                .then(
+                    // The same raw tap as the style buttons (see StyleBar), named for TalkBack.
+                    if (action.keepFocus) Modifier.pointerInput(action.icon) {
+                        detectTapGestures {
+                            haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                            action.onClick()
+                        }
+                    } else Modifier.clickable {
+                        haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        action.onClick()
+                    },
+                ),
         ) {
             Box(contentAlignment = Alignment.Center, modifier = Modifier.fillMaxSize()) {
                 Icon(
@@ -615,9 +640,7 @@ private fun DockButton(action: DockAction, slot: androidx.compose.ui.unit.Dp) {
 }
 
 /**
- * The styles, in a column down the right hand edge, beside the text rather
- * than under it. It costs no height, which matters on a screen whose bottom
- * already carries the title and the actions.
+ * The styles, in one line above the title, shown while the dock's Aa is on.
  *
  * Each button is its own letter drawn in the style it applies, so there is
  * nothing to learn and no icon to misread. Pressed with text selected it
@@ -632,13 +655,11 @@ private fun StyleBar(
     modifier: Modifier = Modifier,
 ) {
     val haptics = LocalHapticFeedback.current
-    Column(
-        modifier = modifier.padding(end = 8.dp, bottom = 8.dp),
-        // At the bottom, next to the thumb and next to everything else that
-        // is reached by hand. It rides up with the keyboard because the
-        // whole column does.
-        verticalArrangement = Arrangement.Bottom,
-        horizontalAlignment = Alignment.CenterHorizontally,
+    // One line, unfolded from the dock's Aa, centred above the title.
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
         for (kind in STYLE_BUTTONS) {
             val on = active and kind.bit != 0
@@ -655,7 +676,6 @@ private fun StyleBar(
                     color = if (on) MaterialTheme.colorScheme.primary else outline,
                 ),
                 modifier = Modifier
-                    .padding(top = 8.dp)
                     .size(44.dp)
                     // Not clickable: a clickable takes the focus, the text
                     // field loses it, and a selection that is no longer
@@ -755,30 +775,37 @@ private fun EditorField(
     modifier: Modifier = Modifier,
     minHeight: Dp = 0.dp,
 ) {
-    Box(modifier = modifier.fillMaxWidth()) {
-        if (value.isEmpty()) {
-            Text(
-                text = placeholder,
-                style = style,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                // Full width, so an alignment carried by the style reaches
-                // the placeholder as well as the text.
-                modifier = Modifier.fillMaxWidth(),
-            )
-        }
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            textStyle = style.copy(color = MaterialTheme.colorScheme.onSurface),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            // A field is only as tall as its text, so an empty note left
-            // most of its zone dead to the touch and writing meant aiming at
-            // the placeholder. A minimum height makes the whole zone the
-            // field, and a tap anywhere in it lands where it looks like it
-            // should.
-            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = minHeight),
-        )
-    }
+    // A field is only as tall as its text, so an empty note left most of its
+    // zone dead to the touch. A minimum height makes the whole zone the field,
+    // and the decoration box keeps the text and its placeholder in the middle
+    // of that height (BasicTextField decorationBox,
+    // https://developer.android.com/develop/ui/compose/text/user-input).
+    BasicTextField(
+        value = value,
+        onValueChange = onValueChange,
+        textStyle = style.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        modifier = modifier.fillMaxWidth(),
+        decorationBox = { inner ->
+            Box(
+                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = minHeight),
+                // The inner field is as wide as its text: a centred style is centred by the box.
+                contentAlignment = if (style.textAlign == TextAlign.Center) Alignment.Center else Alignment.CenterStart,
+            ) {
+                if (value.isEmpty()) {
+                    Text(
+                        text = placeholder,
+                        style = style,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        // Full width, so an alignment carried by the style reaches
+                        // the placeholder as well as the text.
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                inner()
+            }
+        },
+    )
 }
 
 /**
@@ -843,8 +870,15 @@ private fun DateField(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 12.dp)
-            .defaultMinSize(minHeight = 40.dp)
             .onFocusChanged { state -> onFocus(state.isFocused) },
+        // Centred in its height, as the title (BasicTextField decorationBox,
+        // https://developer.android.com/develop/ui/compose/text/user-input).
+        decorationBox = { inner ->
+            Box(
+                modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = 40.dp),
+                contentAlignment = Alignment.Center,
+            ) { inner() }
+        },
     )
 }
 

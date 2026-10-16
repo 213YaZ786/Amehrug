@@ -1,0 +1,33 @@
+# The list is a grid on a tablet, newest first from the left.
+# A note opened and left unchanged keeps its place in the list (NotallyX's checkSave rule).
+# Commands from https://docs.maestro.dev/reference/commands-available.
+appId: com.amehrug.app.debug
+---
+- launchApp
+- tapOn: "New note"
+- tapOn:
+    point: "50%,81%"
+- inputText: "Order-A"
+- back
+- back
+- tapOn: "New note"
+- tapOn:
+    point: "50%,81%"
+- inputText: "Order-B"
+- back
+- back
+- assertVisible:
+    text: "Order-B"
+    leftOf: "Order-A"
+# Opened and left as it was: B stays first.
+- tapOn: "Order-A"
+- waitForAnimationToEnd
+- back
+- assertVisible:
+    text: "Order-B"
+    leftOf: "Order-A"
+# Leave the list as it was.
+- tapOn: "Order-A"
+- tapOn: "Move to trash"
+- tapOn: "Order-B"
+- tapOn: "Move to trash"
