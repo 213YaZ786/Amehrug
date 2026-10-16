@@ -2,6 +2,7 @@ package com.amehrug.app.ui.component
 
 import com.amehrug.app.ui.glass.LocalGlass
 import com.amehrug.app.ui.glass.glassZone
+import com.amehrug.app.ui.theme.zone
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.material3.MaterialTheme
@@ -20,12 +21,14 @@ import androidx.compose.ui.unit.dp
  * You, and made of glass when glass is on (see ui/glass): then the fill, the
  * outline and the elevation give way to the glass, whose rim draws the edge.
  * Every zone goes through here, so the whole app changes at once.
+ *
+ * Shared across the apps of this base: edit Modules/shared, then run sync.sh.
  */
 @Composable
 fun ZoneSurface(
     modifier: Modifier = Modifier,
     shape: Shape = RectangleShape,
-    color: Color = MaterialTheme.colorScheme.surfaceContainerLow,
+    color: Color = MaterialTheme.colorScheme.zone,
     border: BorderStroke? = null,
     tonalElevation: Dp = 0.dp,
     shadowElevation: Dp = 0.dp,
@@ -48,7 +51,7 @@ fun ZoneSurface(
     // fall back to black: the glass carries the page's text colour instead.
     val text = when {
         glass == null -> contentColorFor(color)
-        accent -> MaterialTheme.colorScheme.onPrimaryContainer
+        accent -> if (glass.dark) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onPrimaryContainer
         else -> MaterialTheme.colorScheme.onSurface
     }
     if (onClick == null) {

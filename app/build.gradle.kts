@@ -14,8 +14,8 @@ android {
         applicationId = "com.amehrug.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 45
-        versionName = "0.24.2"
+        versionCode = 46
+        versionName = "0.24.3"
     }
 
     // Signing comes from the environment, so no key and no password is ever
@@ -137,4 +137,6 @@ dependencies {
     // Argon2id for the backup password. Android has no memory hard key
     // derivation of its own, and OWASP puts Argon2id first.
     implementation(libs.bouncycastle)
+    // GIF frames, decoded only inside the isolated DecoderService.
+    implementation(libs.glide.gifdecoder)
 }

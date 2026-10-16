@@ -1,7 +1,8 @@
 package com.amehrug.app.ui.media
 
+import android.content.Context
 import android.graphics.Bitmap
-import android.graphics.BitmapFactory
+import com.amehrug.app.core.security.SafeImages
 import com.amehrug.app.crypto.AttachmentStore
 import com.amehrug.app.diagnostics.Diagnostics
 import kotlinx.coroutines.CancellationException
@@ -27,18 +28,18 @@ object ImageLoader {
             size > MAX_CACHED
     }
 
-    suspend fun load(store: AttachmentStore, name: String, targetPx: Int): Bitmap? {
+    /**
+     * Decoded in the isolated DecoderService (Modules kit safemedia, SafeImages),
+     * never in the app's process: a picture brought in from outside (Notally, a
+     * backup, the photo picker) can reach nothing of the notes or their keys.
+     */
+    suspend fun load(context: Context, store: AttachmentStore, name: String, targetPx: Int): Bitmap? {
         val key = "$name@$targetPx"
         synchronized(cache) { cache[key] }?.let { return it }
         return withContext(Dispatchers.IO) {
             try {
                 val bytes = store.read(name)
-                val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
-                BitmapFactory.decodeByteArray(bytes, 0, bytes.size, bounds)
-                val options = BitmapFactory.Options().apply {
-                    inSampleSize = sampleFor(bounds.outWidth, bounds.outHeight, targetPx)
-                }
-                val bitmap = BitmapFactory.decodeByteArray(bytes, 0, bytes.size, options)
+                val bitmap = SafeImages.decode(context, bytes, targetPx.coerceAtLeast(1))
                 if (bitmap != null) synchronized(cache) { cache[key] = bitmap }
                 bitmap
             } catch (cancel: CancellationException) {
@@ -61,15 +62,4 @@ object ImageLoader {
         }
     }
 
-    /** Powers of two only, which is all the decoder honours. */
-    fun sampleFor(width: Int, height: Int, targetPx: Int): Int {
-        if (width <= 0 || height <= 0 || targetPx <= 0) return 1
-        var sample = 1
-        var longest = maxOf(width, height)
-        while (longest / 2 >= targetPx) {
-            longest /= 2
-            sample *= 2
-        }
-        return sample
-    }
 }

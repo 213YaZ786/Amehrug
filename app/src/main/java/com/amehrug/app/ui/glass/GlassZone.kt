@@ -12,6 +12,7 @@ import androidx.compose.ui.graphics.Outline
 import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.ShaderBrush
 import androidx.compose.ui.graphics.drawOutline
+import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.drawscope.ContentDrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.toArgb
@@ -35,19 +36,19 @@ import androidx.compose.ui.unit.toSize
  * zones can scroll at no real cost. Below Android 13, which has no runtime
  * shaders, the zone is a tinted pane with the same rim, over the same light.
  */
-fun Modifier.glassZone(shape: Shape, look: GlassLook, lens: Float = 0.7f): Modifier =
-    this then GlassZoneElement(shape, look, lens)
+fun Modifier.glassZone(shape: Shape, look: GlassLook, lens: Float = 0.7f, flanks: Float = 0f): Modifier =
+    this then GlassZoneElement(shape, look, lens, flanks)
 
-private data class GlassZoneElement(val shape: Shape, val look: GlassLook, val lens: Float) :
+private data class GlassZoneElement(val shape: Shape, val look: GlassLook, val lens: Float, val flanks: Float) :
     ModifierNodeElement<GlassZoneNode>() {
-    override fun create() = GlassZoneNode(shape, look, lens)
+    override fun create() = GlassZoneNode(shape, look, lens, flanks)
     override fun update(node: GlassZoneNode) {
-        node.shape = shape; node.look = look; node.lens = lens; node.invalidateDraw()
+        node.shape = shape; node.look = look; node.lens = lens; node.flanks = flanks; node.invalidateDraw()
     }
     override fun InspectorInfo.inspectableProperties() { name = "glassZone" }
 }
 
-private class GlassZoneNode(var shape: Shape, var look: GlassLook, var lens: Float) :
+private class GlassZoneNode(var shape: Shape, var look: GlassLook, var lens: Float, var flanks: Float) :
     Modifier.Node(), DrawModifierNode, GlobalPositionAwareModifierNode {
 
     private var origin = Offset.Zero
@@ -73,6 +74,12 @@ private class GlassZoneNode(var shape: Shape, var look: GlassLook, var lens: Flo
             null
         }
         if (zone != null) {
+            // A soft shadow under the zone, so it floats over the light (the glass is opaque over it).
+            drawIntoCanvas { canvas ->
+                val paint = androidx.compose.ui.graphics.Paint().apply { color = look.ground }
+                paint.asFrameworkPaint().setShadowLayer(10f * density, 0f, 3.5f * density, android.graphics.Color.argb(if (look.dark) 110 else 34, 0, 0, 0))
+                canvas.drawOutline(outline, paint)
+            }
             drawOutline(outline, ShaderBrush(zone))
         } else {
             drawOutline(outline, look.zoneTint)
@@ -88,7 +95,9 @@ private class GlassZoneNode(var shape: Shape, var look: GlassLook, var lens: Flo
             .onFailure { shaderFailed = true; android.util.Log.w("Glass", "zone shader refused", it) }
             .getOrNull()?.also { shader = it } ?: return null
         s.setFloatUniform("size", size.width, size.height)
-        s.setFloatUniform("radius", cornerRadius(outline))
+        val r = cornerRadii(outline)
+        s.setFloatUniform("radii", r[0], r[1], r[2], r[3])
+        s.setFloatUniform("flanks", flanks)
         s.setFloatUniform("origin", origin.x, origin.y)
         s.setFloatUniform("dpr", density)
         s.setFloatUniform("lens", lens)
@@ -102,9 +111,16 @@ private class GlassZoneNode(var shape: Shape, var look: GlassLook, var lens: Flo
 
 /** The corner radius of a rounded outline, in pixels; a plain rectangle has none. */
 internal fun cornerRadius(outline: Outline): Float = when (outline) {
-    is Outline.Rounded -> outline.roundRect.topLeftCornerRadius.x
+    // The smallest corner: a bubble's tail (one tight corner) is glass too, not left bare.
+    is Outline.Rounded -> with(outline.roundRect) { minOf(topLeftCornerRadius.x, topRightCornerRadius.x, bottomLeftCornerRadius.x, bottomRightCornerRadius.x) }
     is Outline.Rectangle -> 0f
     is Outline.Generic -> 0f
+}
+
+/** Each corner's radius in pixels (top start, top end, bottom end, bottom start), so the rim follows a bubble's tail and its round corners alike. */
+internal fun cornerRadii(outline: Outline): FloatArray = when (outline) {
+    is Outline.Rounded -> with(outline.roundRect) { floatArrayOf(topLeftCornerRadius.x, topRightCornerRadius.x, bottomRightCornerRadius.x, bottomLeftCornerRadius.x) }
+    else -> floatArrayOf(0f, 0f, 0f, 0f)
 }
 
 /** The halos as four plain uniforms each, placed in window pixels; a missing one has no strength. */
@@ -122,11 +138,14 @@ internal fun setHalos(shader: RuntimeShader, look: GlassLook, window: Size) {
     }
 }
 
-/** The rim without shaders: bright on the top and bottom edges, faint on the flanks. */
+/**
+ * The rim without shaders: a soft light on the top edge that fades down
+ * the flanks, a faint shade below; never a white line.
+ */
 internal fun rimBrush(look: GlassLook, height: Float): Brush {
-    val strong = Color.White.copy(alpha = if (look.dark) 0.5f else 0.85f)
-    val faint = Color.White.copy(alpha = 0.06f)
-    return Brush.verticalGradient(0f to strong, 0.3f to faint, 0.7f to faint, 1f to strong.copy(alpha = strong.alpha * 0.7f), endY = height)
+    val strong = Color.White.copy(alpha = if (look.dark) 0.16f else 0.24f)
+    val faint = Color.White.copy(alpha = 0.03f)
+    return Brush.verticalGradient(0f to strong, 0.35f to faint, 1f to Color.Black.copy(alpha = 0.04f), endY = height)
 }
 
 internal const val HALOS = 4
@@ -137,23 +156,47 @@ internal const val GLASS_COMMON = """
         float2 q = abs(p) - b + r;
         return length(max(q, 0.0)) + min(max(q.x, q.y), 0.0) - r;
     }
+    // A rounded box with its own radius at each corner (top left, top right, bottom right, bottom left).
+    float sdb4(float2 p, float2 b, float4 r) {
+        float rr = p.x < 0.0 ? (p.y < 0.0 ? r.x : r.w) : (p.y < 0.0 ? r.y : r.z);
+        return sdb(p, b, rr);
+    }
+    float2 normalAt4(float2 q, float2 b, float4 r, float e) {
+        float2 n = float2(sdb4(q + float2(e, 0.0), b, r) - sdb4(q - float2(e, 0.0), b, r),
+                          sdb4(q + float2(0.0, e), b, r) - sdb4(q - float2(0.0, e), b, r));
+        return normalize(n + 1e-6);
+    }
     float2 normalAt(float2 q, float2 b, float r, float e) {
         float2 n = float2(sdb(q + float2(e, 0.0), b, r) - sdb(q - float2(e, 0.0), b, r),
                           sdb(q + float2(0.0, e), b, r) - sdb(q - float2(0.0, e), b, r));
         return normalize(n + 1e-6);
     }
-    float rimLight(float depth, float2 n, float dpr, float dark) {
-        float rim = smoothstep(2.2 * dpr, 0.0, depth);
-        float lit = 0.35 + 0.9 * pow(max(dot(n, float2(-0.25, -0.97)), 0.0), 2.0)
-                  + 0.55 * pow(max(dot(n, float2(0.2, 0.98)), 0.0), 3.0);
-        float glow = 0.08 * smoothstep(16.0 * dpr, 0.0, depth) * max(-n.y, 0.0);
-        return rim * lit * (dark > 0.5 ? 0.5 : 0.8) + glow;
+    // Polished glass (the user's reference, 2026-10-10): a thin rim of light
+    // at the very edge, bright at the top and the bottom, faint on the
+    // flanks, a hair of shade just inside it for the bevel; under it a wide,
+    // gentle gradient, light from above, shade below. Never a flat white line.
+    // [flanks] 1 lights the sides as well (a message bubble, as iOS's).
+    float rimLight(float depth, float2 n, float dpr, float dark, float flanks) {
+        float edge = 1.0 - smoothstep(0.4 * dpr, 1.8 * dpr, depth);
+        float bevel = smoothstep(1.2 * dpr, 2.4 * dpr, depth) * (1.0 - smoothstep(2.4 * dpr, 4.5 * dpr, depth));
+        float band = 1.0 - smoothstep(0.0, 20.0 * dpr, depth);
+        band = band * band * band;
+        float vertical = abs(n.y);
+        float up = pow(max(-n.y, 0.0), 1.6);
+        float down = pow(max(n.y, 0.0), 2.0);
+        // With flanks, iOS's specular instead: bright where the edge faces the top left or the bottom right, faint between.
+        float spec = pow(max(dot(n, float2(-0.7071, -0.7071)), 0.0), 2.0) + 0.8 * pow(max(dot(n, float2(0.7071, 0.7071)), 0.0), 2.0);
+        float rim = edge * (0.10 + 0.32 * mix(pow(vertical, 1.4), 0.15 + 0.85 * spec, flanks)) * (dark > 0.5 ? 0.75 : 1.0);
+        float light = band * (0.20 + 0.80 * up + flanks * 0.6 * pow(abs(n.x), 1.6)) * (dark > 0.5 ? 0.10 : 0.10);
+        float shade = band * down * (dark > 0.5 ? 0.04 : 0.03) + bevel * (dark > 0.5 ? 0.05 : 0.035);
+        return rim + light - shade;
     }
 """
 
 private const val ZONE_AGSL = """
     uniform float2 size;
-    uniform float radius;
+    uniform float4 radii;
+    uniform float flanks;
     uniform float2 origin;
     uniform float dpr;
     uniform float lens;
@@ -184,15 +227,15 @@ private const val ZONE_AGSL = """
     half4 main(float2 p) {
         float2 b = size * 0.5;
         float2 q = p - b;
-        float d = sdb(q, b, radius);
-        float2 n = normalAt(q, b, radius, 1.5 * dpr);
+        float d = sdb4(q, b, radii);
+        float2 n = normalAt4(q, b, radii, 1.5 * dpr);
         float depth = -d;
         float k = 1.0 - clamp(depth / min(min(b.x, b.y), 22.0 * dpr), 0.0, 1.0);
         k = k * k;
         float2 src = b + q * (1.0 - 0.05 * lens) - n * k * lens * 20.0 * dpr;
         half3 c = ambient(origin + src);
         c = mix(c, tint.rgb, tint.a);
-        c += half3(rimLight(depth, n, dpr, dark));
+        c += half3(rimLight(depth, n, dpr, dark, flanks));
         return half4(c, 1.0);
     }
 """

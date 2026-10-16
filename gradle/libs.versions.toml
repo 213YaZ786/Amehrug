@@ -14,6 +14,8 @@ coroutines = "1.11.0"
 sqlcipher = "4.19.0"
 sqlite = "2.7.0"
 bouncycastle = "1.86"
+# Glide's GIF decoder (pure Java), run only inside the isolated DecoderService (Modules kit safemedia).
+gifdecoder = "5.0.9"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "core" }
@@ -34,6 +36,7 @@ bouncycastle = { module = "org.bouncycastle:bcprov-jdk18on", version.ref = "boun
 # and can never be a version that does not exist. It brings JUnit 4.13.2 with
 # it, which is why no junit entry is declared here.
 kotlin-test-junit = { module = "org.jetbrains.kotlin:kotlin-test-junit", version.ref = "kotlin" }
+glide-gifdecoder = { module = "com.github.bumptech.glide:gifdecoder", version.ref = "gifdecoder" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

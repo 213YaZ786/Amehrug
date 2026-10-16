@@ -11,6 +11,9 @@ class AmehrugApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        // The isolated DecoderService starts here as well: it gets nothing of the
+        // app (no database, no keys, no log), as in every app of the Modules base.
+        if (Process.isIsolated()) return
         BuildConfigInfo.init(this)
         val log = Diagnostics.log
         val sinceStart = SystemClock.uptimeMillis() - Process.getStartUptimeMillis()

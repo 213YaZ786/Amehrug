@@ -43,8 +43,9 @@ import com.amehrug.app.ui.media.ImageLoader
 /** One decrypted picture, scaled for the space it is going into. */
 @Composable
 fun AttachmentImage(name: String, targetPx: Int, modifier: Modifier = Modifier) {
+    val context = androidx.compose.ui.platform.LocalContext.current
     val bitmap by produceState<android.graphics.Bitmap?>(initialValue = null, key1 = name, key2 = targetPx) {
-        value = ImageLoader.load(AppGraph.attachments, name, targetPx)
+        value = ImageLoader.load(context, AppGraph.attachments, name, targetPx)
     }
     Box(
         modifier = modifier.background(MaterialTheme.colorScheme.surfaceVariant),
