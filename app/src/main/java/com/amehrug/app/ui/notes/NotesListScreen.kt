@@ -563,8 +563,10 @@ private fun FolderActions(
 }
 
 /**
- * One round pane of glass with its icon, as tall as the search pill
- * (https://developer.apple.com/design/human-interface-guidelines/materials).
+ * One round pane of glass with its icon, as tall as the search pill: Material 3's
+ * IconButton (a clipped circle, clickable, one centred icon; AndroidX
+ * https://android.googlesource.com/platform/frameworks/support/+/refs/heads/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/IconButton.kt)
+ * inside the app's FloatingSurface glass.
  */
 @Composable
 private fun RoundPane(icon: Int, label: Int, on: Boolean, onClick: () -> Unit) {
