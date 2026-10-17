@@ -358,10 +358,10 @@ fun NotesListScreen(
                         }
                     }
                     NoteDock(
-                        // Settings has its round pane at the top (the user, 2026-10-17).
-                        order = dockOrder.filter { it != DockItem.SETTINGS },
+                        // Settings and the search have their round panes at the top (the user, 2026-10-17).
+                        order = dockOrder.filter { it != DockItem.SETTINGS && it != DockItem.SEARCH },
                         columns = columns,
-                        selected = if (query.isBlank()) DockItem.HOME else DockItem.SEARCH,
+                        selected = DockItem.HOME,
                         onAction = { item ->
                             when (item) {
                                 DockItem.HOME -> onHome()
@@ -453,6 +453,27 @@ private fun NotesSearchBar(
     actions: @Composable () -> Unit,
 ) {
     val keyboard = LocalSoftwareKeyboardController.current
+    // The search behind one magnifier that opens into the field, as the SMS app's list
+    // (its ConversationsScreen) after Material 3's search from an app bar icon
+    // (https://m3.material.io/components/search/guidelines); the dock has no search of
+    // its own (the user, 2026-10-17).
+    var open by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    val shown = open || query.isNotEmpty()
+    androidx.compose.runtime.LaunchedEffect(open) { if (open && query.isEmpty()) runCatching { focusRequester.requestFocus() } }
+    if (!shown) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .windowInsetsPadding(topBarInsets)
+                .padding(horizontal = 12.dp, vertical = 8.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            RoundPane(R.drawable.ic_search, R.string.action_search, false) { open = true }
+            actions()
+        }
+        return
+    }
     // One line at the top, as the SMS app's list (Modules panes kit, FloatingTop):
     // the search pill, then the places of the notes as round panes of glass beside
     // it, where the side rail and the drawer were.
@@ -514,8 +535,13 @@ private fun NotesSearchBar(
                         modifier = Modifier.fillMaxWidth().focusRequester(focusRequester),
                     )
                 }
-                if (query.isNotEmpty()) {
-                    IconButton(onClick = { onQueryChange("") }) {
+                // Close folds the field back into its magnifier, the words cleared.
+                run {
+                    IconButton(onClick = {
+                        onQueryChange("")
+                        open = false
+                        keyboard?.hide()
+                    }) {
                         Icon(
                             painter = painterResource(R.drawable.ic_close),
                             contentDescription = stringResource(R.string.action_clear_search),
