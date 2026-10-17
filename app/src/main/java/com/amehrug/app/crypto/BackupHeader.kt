@@ -48,7 +48,12 @@ data class BackupHeader(
         /** PBKDF2-HMAC-SHA256, kept readable as a fallback and for old files. */
         const val KDF_PBKDF2 = 1
 
-        private val magicBytes = MAGIC.toByteArray(Charsets.US_ASCII)
+        const val MAX_MEMORY_KIB = 128 * 1024
+        const val MAX_PARALLELISM = 16
+        const val MAX_ARGON2_PASSES = 10
+        const val MAX_PBKDF2_ROUNDS = 1_200_000
+
+        private val magicBytes =MAGIC.toByteArray(Charsets.US_ASCII)
 
         fun encode(header: BackupHeader): ByteArray {
             require(header.salt.size == SALT_SIZE) { "salt must be $SALT_SIZE bytes" }
@@ -77,11 +82,15 @@ data class BackupHeader(
             val memoryKib = readInt(bytes, 7 + SALT_SIZE)
             val iterations = readInt(bytes, 11 + SALT_SIZE)
             val parallelism = bytes[15 + SALT_SIZE].toInt()
-            // Bounds keep a damaged or hostile header from asking for eight
-            // gigabytes of memory or for a week of work.
-            require(memoryKib in 1..1_048_576) { "memory out of range" }
-            require(iterations in 1..10_000_000) { "iterations out of range" }
-            require(parallelism in 1..64) { "parallelism out of range" }
+            // Bounds keep a damaged or hostile header from asking for a gigabyte
+            // of memory or for a week of work, checked before anything is
+            // allocated. Twice what this app writes (64 MiB, 3 passes, 4 lanes;
+            // 600000 PBKDF2 rounds), so a later raise still reads old files.
+            // Argon2's parameters are those of RFC 9106.
+            require(memoryKib in 1..MAX_MEMORY_KIB) { "memory out of range" }
+            require(parallelism in 1..MAX_PARALLELISM) { "parallelism out of range" }
+            val maxIterations = if (kdf == KDF_ARGON2ID) MAX_ARGON2_PASSES else MAX_PBKDF2_ROUNDS
+            require(iterations in 1..maxIterations) { "iterations out of range" }
             return BackupHeader(kdf, salt, memoryKib, iterations, parallelism)
         }
 

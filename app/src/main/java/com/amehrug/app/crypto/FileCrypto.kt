@@ -1,6 +1,5 @@
 package com.amehrug.app.crypto
 
-import java.io.EOFException
 import java.io.InputStream
 import java.io.OutputStream
 import java.security.GeneralSecurityException
@@ -146,7 +145,7 @@ object FileCrypto {
         try {
             readFully(input, rest)
         } catch (e: GeneralSecurityException) {
-            throw EOFException("length field is cut")
+            throw GeneralSecurityException("length field is cut")
         }
         return (first shl 24) or
             ((rest[0].toInt() and 0xFF) shl 16) or

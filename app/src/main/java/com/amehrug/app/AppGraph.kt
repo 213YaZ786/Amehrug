@@ -1,7 +1,10 @@
 package com.amehrug.app
 
 import android.app.Application
+import android.os.Process
+import android.os.SystemClock
 import com.amehrug.app.backup.BackupManager
+import com.amehrug.app.backup.CacheSweep
 import com.amehrug.app.backup.NotallyImporter
 import com.amehrug.app.crypto.AttachmentStore
 import com.amehrug.app.crypto.KeyVault
@@ -77,6 +80,14 @@ object AppGraph {
     fun startupCheck() {
         appScope.launch {
             val log = Diagnostics.log
+            // Plain copies a killed backup or import left in the cache: what is
+            // older than this process cannot belong to a run of this process.
+            // Android's guidance on cache files:
+            // https://developer.android.com/training/data-storage/app-specific#internal-cache-create
+            val processStart = System.currentTimeMillis() -
+                (SystemClock.elapsedRealtime() - Process.getStartElapsedRealtime())
+            val swept = CacheSweep.sweep(app.cacheDir, processStart)
+            if (swept > 0) log.info("backup", "$swept plain leftovers removed")
             val databaseFile = app.getDatabasePath(AmehrugDatabase.NAME)
             if (databaseFile.exists() && !KeyVault.exists(app)) {
                 // Either a database from before encryption, or a restored

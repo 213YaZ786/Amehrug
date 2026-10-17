@@ -12,7 +12,6 @@ import com.amehrug.app.model.Attachment
 import java.io.File
 import java.io.FileOutputStream
 import java.util.zip.ZipEntry
-import java.util.zip.ZipInputStream
 import java.util.zip.ZipOutputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -39,7 +38,7 @@ class BackupManager(
     suspend fun writeTo(target: Uri, password: CharArray, now: Long): BackupReport =
         withContext(Dispatchers.IO) {
             val started = System.nanoTime()
-            val staging = File.createTempFile("backup", ".zip", appContext.cacheDir)
+            val staging = File.createTempFile(CacheSweep.BACKUP_PREFIX, ".zip", appContext.cacheDir)
             try {
                 val all = notes.allNotes()
                 val labels = notes.allLabels()
@@ -82,7 +81,7 @@ class BackupManager(
     suspend fun restoreFrom(source: Uri, password: CharArray): RestoreReport =
         withContext(Dispatchers.IO) {
             val started = System.nanoTime()
-            val staging = File.createTempFile("restore", ".zip", appContext.cacheDir)
+            val staging = File.createTempFile(CacheSweep.RESTORE_PREFIX, ".zip", appContext.cacheDir)
             try {
                 val input = appContext.contentResolver.openInputStream(source)
                     ?: throw IllegalStateException("cannot read the chosen file")
@@ -110,13 +109,17 @@ class BackupManager(
         var restoredNotes = 0
         var restoredFiles = 0
 
-        ZipInputStream(staging.inputStream()).use { zip ->
-            var entry = zip.nextEntry
+        // Entry names are only keys here, never paths, so no traversal; the
+        // caps on count and inflated bytes are GuardedZip's.
+        GuardedZip(staging.inputStream(), ZipLimits.BACKUP).use { zip ->
+            var entry = zip.nextEntry()
             while (entry != null) {
                 val name = entry.name
                 when {
                     name == BackupFormat.JSON_ENTRY -> {
-                        content = BackupFormat.decode(zip.readBytes().toString(Charsets.UTF_8))
+                        content = BackupFormat.decode(
+                            zip.readCapped(MAX_JSON_BYTES).toString(Charsets.UTF_8),
+                        )
                         restoredNotes = insertNotes(content, waiting)
                     }
                     name.startsWith(BackupFormat.MEDIA_PREFIX) -> {
@@ -124,7 +127,7 @@ class BackupManager(
                         val pending = waiting[shortName]
                         if (pending != null) {
                             // The stream is not closed here, the zip owns it.
-                            val stored = attachments.write(zip)
+                            val stored = attachments.write(zip.stream)
                             notes.addAttachment(
                                 noteId = pending.noteId,
                                 attachment = pending.attachment.copy(fileName = stored),
@@ -134,8 +137,7 @@ class BackupManager(
                         }
                     }
                 }
-                zip.closeEntry()
-                entry = zip.nextEntry
+                entry = zip.nextEntry()
             }
         }
         val known = content ?: throw IllegalArgumentException("this file holds no Amehrug backup")
@@ -171,4 +173,9 @@ class BackupManager(
         val attachment: Attachment,
         val position: Int,
     )
+
+    private companion object {
+        /** The notes as JSON are read in memory: 32 MiB is far above any real vault's text. */
+        const val MAX_JSON_BYTES = 32 * 1024 * 1024
+    }
 }

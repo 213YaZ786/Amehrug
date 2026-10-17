@@ -10,7 +10,6 @@ import com.amehrug.app.model.NotallyImport
 import com.amehrug.app.model.NotallyRow
 import java.io.File
 import java.io.FileOutputStream
-import java.util.zip.ZipInputStream
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -34,7 +33,7 @@ class NotallyImporter(
 
     suspend fun importFrom(source: Uri): ImportReport = withContext(Dispatchers.IO) {
         val started = System.nanoTime()
-        val work = File(appContext.cacheDir, "notally-import")
+        val work = File(appContext.cacheDir, CacheSweep.IMPORT_FOLDER)
         work.deleteRecursively()
         val media = File(work, "media")
         media.mkdirs()
@@ -60,19 +59,20 @@ class NotallyImporter(
         val input = appContext.contentResolver.openInputStream(source)
             ?: throw IllegalStateException("cannot read the chosen file")
         input.use { stream ->
-            ZipInputStream(stream).use { zip ->
-                var entry = zip.nextEntry
+            GuardedZip(stream, ZipLimits.NOTALLY).use { zip ->
+                var entry = zip.nextEntry()
                 while (entry != null) {
-                    // Only the last part of the name is kept, so an entry
-                    // called ../../something cannot escape the folder.
+                    // A name that leaves the folder refuses the whole file
+                    // (Android's zip path traversal recipe, see ZipNames);
+                    // then only the last part is kept, the media being flat.
+                    ZipNames.resolve(work, entry.name)
                     val name = File(entry.name).name
                     if (!entry.isDirectory && name.isNotEmpty()) {
                         val target = if (name == DATABASE_ENTRY) File(work, name) else File(media, name)
-                        FileOutputStream(target).use { output -> zip.copyTo(output) }
+                        FileOutputStream(target).use { output -> zip.stream.copyTo(output) }
                         if (name == DATABASE_ENTRY) database = target
                     }
-                    zip.closeEntry()
-                    entry = zip.nextEntry
+                    entry = zip.nextEntry()
                 }
             }
         }
