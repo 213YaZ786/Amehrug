@@ -14,8 +14,8 @@ android {
         applicationId = "com.amehrug.app"
         minSdk = 31
         targetSdk = 37
-        versionCode = 49
-        versionName = "0.24.6"
+        versionCode = 50
+        versionName = "0.24.7"
     }
 
     // Signing comes from the environment, so no key and no password is ever
@@ -115,6 +115,8 @@ dependencies {
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
+    // Material 3 Expressive's shapes (EmptyZone's Sunny, Modules base): Jetpack graphics-shapes (Apache-2.0).
+    implementation("androidx.graphics:graphics-shapes:1.1.0")
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
 

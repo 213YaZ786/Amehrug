@@ -68,6 +68,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -578,7 +579,12 @@ private fun RoundPane(icon: Int, label: Int, on: Boolean, onClick: () -> Unit) {
             Icon(
                 painter = painterResource(icon),
                 contentDescription = stringResource(label),
-                tint = if (on) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSurfaceVariant,
+                // On the accent, light by night as Modules' FloatingPane (accent && dark -> onSurface).
+                tint = when {
+                    !on -> MaterialTheme.colorScheme.onSurfaceVariant
+                    com.amehrug.app.ui.glass.LocalGlass.current?.dark ?: androidx.compose.foundation.isSystemInDarkTheme() ->MaterialTheme.colorScheme.onSurface
+                    else -> MaterialTheme.colorScheme.onPrimaryContainer
+                },
             )
         }
     }
@@ -596,21 +602,19 @@ private fun SectionLabel(text: String) {
 
 @Composable
 private fun EmptyState(folder: Folder, searching: Boolean, modifier: Modifier = Modifier) {
-    val message = when {
-        searching -> R.string.empty_search
-        folder == Folder.ARCHIVED -> R.string.empty_archive
-        folder == Folder.DELETED -> R.string.empty_trash
-        else -> R.string.empty_notes
+    // The shared empty zone (Modules base EmptyZone), as every app's empty screens: icon on Sunny, title, one line.
+    val (title, message, icon) = when {
+        searching -> Triple(R.string.empty_search_title, R.string.empty_search, R.drawable.ic_search)
+        folder == Folder.ARCHIVED -> Triple(R.string.empty_archive_title, R.string.empty_archive, R.drawable.ic_archive)
+        folder == Folder.DELETED -> Triple(R.string.empty_trash_title, R.string.empty_trash, R.drawable.ic_delete)
+        else -> Triple(R.string.empty_notes_title, R.string.empty_notes, R.drawable.ic_note)
     }
-    Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = stringResource(message),
-            style = MaterialTheme.typography.bodyLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(40.dp),
-        )
-    }
+    com.amehrug.app.ui.component.EmptyZone(
+        title = stringResource(title),
+        message = stringResource(message),
+        icon = androidx.compose.ui.graphics.vector.ImageVector.vectorResource(icon),
+        modifier = modifier.fillMaxSize(),
+    )
 }
 
 @Composable

@@ -85,9 +85,13 @@
     <string name="search_archive">Rechercher dans l\'archive</string>
     <string name="search_trash">Rechercher dans la corbeille</string>
 
-    <string name="empty_notes">Rien pour l\'instant. Touchez le bouton pour écrire votre première note.</string>
-    <string name="empty_archive">Rien dans l\'archive.</string>
-    <string name="empty_trash">La corbeille est vide. Une note laissée ici part définitivement après 30 jours.</string>
+    <string name="empty_notes_title">Aucune note</string>
+    <string name="empty_notes">Touchez le bouton pour écrire votre première note.</string>
+    <string name="empty_archive_title">Rien dans l\'archive</string>
+    <string name="empty_archive">Les notes archivées s\'affichent ici.</string>
+    <string name="empty_trash_title">La corbeille est vide</string>
+    <string name="empty_trash">Une note laissée ici part définitivement après 30 jours.</string>
+    <string name="empty_search_title">Aucun résultat</string>
     <string name="empty_search">Aucune note ne correspond à ces mots.</string>
 
     <string name="editor_title">Titre</string>

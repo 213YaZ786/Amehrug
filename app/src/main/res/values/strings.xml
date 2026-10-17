@@ -116,9 +116,13 @@
     <string name="search_archive">Search the archive</string>
     <string name="search_trash">Search the trash</string>
 
-    <string name="empty_notes">Nothing here yet. Tap the button to write your first note.</string>
-    <string name="empty_archive">Nothing archived.</string>
-    <string name="empty_trash">The trash is empty. Notes left here go for good after 30 days.</string>
+    <string name="empty_notes_title">No notes yet</string>
+    <string name="empty_notes">Tap the button to write your first note.</string>
+    <string name="empty_archive_title">Nothing archived</string>
+    <string name="empty_archive">Archived notes show here.</string>
+    <string name="empty_trash_title">Trash is empty</string>
+    <string name="empty_trash">Notes left here go for good after 30 days.</string>
+    <string name="empty_search_title">Nothing found</string>
     <string name="empty_search">No note matches those words.</string>
 
     <string name="editor_title">Title</string>
