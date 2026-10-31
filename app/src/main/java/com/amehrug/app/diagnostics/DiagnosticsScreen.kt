@@ -59,7 +59,8 @@ fun DiagnosticsScreen(onBack: () -> Unit) {
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(R.string.diagnostics_title)) },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent),
+                // Every title in the accent (the user, 2026-10-31), as Modules' SettingsSectionTitle.
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Transparent, titleContentColor = MaterialTheme.colorScheme.primary),
                 navigationIcon = {
                     IconButton(onClick = onBack) {
                         Icon(

@@ -102,6 +102,8 @@ fun SettingsScreen(settings: AppSettings, onBack: () -> Unit, onDiagnostics: () 
             Text(
                 text = stringResource(R.string.settings_title),
                 style = MaterialTheme.typography.displaySmall,
+                // Every title in the accent (the user, 2026-10-31), as Modules' SettingsSectionTitle.
+                color = MaterialTheme.colorScheme.primary,
                 modifier = Modifier.padding(start = 4.dp, top = 8.dp, bottom = 12.dp),
             )
 

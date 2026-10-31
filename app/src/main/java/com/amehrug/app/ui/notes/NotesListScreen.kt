@@ -621,7 +621,8 @@ private fun SectionLabel(text: String) {
     Text(
         text = text,
         style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        // Every title in the accent (the user, 2026-10-31), as Modules' SettingsSectionTitle.
+        color = MaterialTheme.colorScheme.primary,
         modifier = Modifier.padding(start = 6.dp, top = 10.dp, bottom = 2.dp),
     )
 }
