@@ -54,6 +54,13 @@ abstract class AmehrugDatabase : RoomDatabase() {
                 NAME,
             )
                 .openHelperFactory(factory)
+                // One connection, so the key is derived once. Opening is slow
+                // by design in SQLCipher (key derivation on each open, Zetetic:
+                // https://discuss.zetetic.net/t/sqlcipher-performance-optimization/14),
+                // and in WAL mode the pool opens up to four more connections
+                // (AOSP SQLiteConnectionPool, size 1 without WAL; Room's
+                // RoomDatabase.Builder.setJournalMode, JournalMode.TRUNCATE).
+                .setJournalMode(RoomDatabase.JournalMode.TRUNCATE)
                 .build()
         }
     }

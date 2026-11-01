@@ -162,8 +162,9 @@ private fun AmehrugApp() {
     // Glass over Material You: the look for this theme, or none when the
     // user turned it off, and the page's ground with its ambient light under
     // every screen. Until the settings are read, glass is on, its default.
+    // Quiet glass, as SMS's AppSurface (213YaZ786/SMS, ui/theme/AppSurface.kt).
     val glassOn = (state as? SettingsState.Ready)?.settings?.glass ?: true
-    val look = rememberGlassLook(MaterialTheme.colorScheme, glassOn)
+    val look = rememberGlassLook(MaterialTheme.colorScheme, glassOn, quiet = true)
     CompositionLocalProvider(LocalGlass provides look) {
     Box(Modifier.fillMaxSize().glassGround(look, MaterialTheme.colorScheme.background)) {
     when (val current = state) {

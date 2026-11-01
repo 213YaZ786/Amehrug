@@ -5,6 +5,7 @@ import androidx.compose.foundation.gestures.awaitFirstDown
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.input.pointer.PointerInputScope
+import androidx.compose.ui.input.pointer.changedToUp
 import androidx.compose.ui.input.pointer.changedToUpIgnoreConsumed
 import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.unit.dp
@@ -18,8 +19,10 @@ import androidx.compose.ui.unit.dp
  * gesture once at the grid level removes the race and gives every position in
  * a single coordinate space, the one the grid itself reports its items in.
  *
- * Three outcomes from one press:
+ * Four outcomes from one press:
  *  - up before the long press timeout and without travel, that is a tap
+ *  - an up already consumed, the system taking the gesture (leaving by the
+ *    navigation bar), that is a cancel: no tap
  *  - travel before the timeout, that is a scroll, so nothing is consumed and
  *    the grid underneath keeps it
  *  - the timeout with the finger still down, that is a selection sweep. From
@@ -53,7 +56,13 @@ suspend fun PointerInputScope.detectSelectionGestures(
                 if (change == null) {
                     ended = true
                 } else if (change.changedToUpIgnoreConsumed()) {
-                    tapped = true
+                    // Port of AndroidX TapGestureDetector.waitForUpOrCancellation
+                    // https://android.googlesource.com/platform/frameworks/support/+/refs/heads/androidx-main/compose/foundation/foundation/src/commonMain/kotlin/androidx/compose/foundation/gestures/TapGestureDetector.kt
+                    // An up is a tap only when unconsumed (changedToUp). Compose delivers
+                    // a system cancel as an already consumed up
+                    // (SuspendingPointerInputModifierNodeImpl.onCancelPointerInput,
+                    // isInitiallyConsumed): the gesture ends with no tap.
+                    tapped = change.changedToUp()
                     ended = true
                 } else if ((change.position - down.position).getDistance() > slop) {
                     ended = true

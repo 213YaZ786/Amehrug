@@ -111,8 +111,12 @@ fun NotesListScreen(
 ) {
     val searchFocus = remember { FocusRequester() }
     val repository = AppGraph.notes
-    val notes by produceState(
-        initialValue = emptyList<Note>(),
+    // Port of Now in Android's Loading state (NewsFeedUiState.Loading, used by ForYouScreen):
+    // https://github.com/android/nowinandroid/blob/main/core/ui/src/main/kotlin/com/google/samples/apps/nowinandroid/core/ui/NewsFeed.kt
+    // null means "not loaded yet", so the empty message waits for the first list. The state
+    // is kept across folder, query and label changes, so no empty flash between two lists.
+    val loaded by produceState<List<Note>?>(
+        initialValue = null,
         key1 = folder,
         key2 = query,
         key3 = label,
@@ -124,6 +128,7 @@ fun NotesListScreen(
         }
         flow.collect { value = it }
     }
+    val notes = loaded.orEmpty()
     val allLabels by produceState(initialValue = emptyList<String>()) {
         repository.observeLabels().collect { value = it }
     }
@@ -206,7 +211,9 @@ fun NotesListScreen(
                         .fillMaxSize()
                         .then(if (look != null) Modifier.glassSource(backdrop, look) else Modifier),
                 ) {
-                if (notes.isEmpty()) {
+                if (loaded == null) {
+                    // Loading: nothing drawn in place of the grid or the empty message.
+                } else if (notes.isEmpty()) {
                     EmptyState(folder = folder, searching = query.isNotBlank(), modifier = Modifier.padding(insets))
                 } else {
                     // Selecting by hand: hold a card to start, then slide

@@ -7,9 +7,6 @@ import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.OffsetMapping
-import androidx.compose.ui.text.input.TransformedText
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.text.style.TextDecoration
 import com.amehrug.app.model.TextSpan
 import com.amehrug.app.model.TextSpans
@@ -46,27 +43,4 @@ fun annotate(text: String, spans: List<TextSpan>, linkColor: Color): AnnotatedSt
             )
         }
     }
-}
-
-/**
- * What lets a plain text field show styled text.
- *
- * The transformation changes no character, so the cursor sits exactly where
- * the text says it does and the mapping is the identity one. Styling through
- * the field's own value would mean carrying an AnnotatedString in and out of
- * every keystroke, which is both slower and easy to get wrong.
- */
-class SpanTransformation(
-    private val spans: List<TextSpan>,
-    private val linkColor: Color,
-) : VisualTransformation {
-    override fun filter(text: AnnotatedString): TransformedText =
-        TransformedText(annotate(text.text, spans, linkColor), OffsetMapping.Identity)
-
-    // The field only reruns the transformation when this object is a
-    // different one, so equality has to follow the spans.
-    override fun equals(other: Any?): Boolean =
-        other is SpanTransformation && other.spans == spans && other.linkColor == linkColor
-
-    override fun hashCode(): Int = 31 * spans.hashCode() + linkColor.hashCode()
 }

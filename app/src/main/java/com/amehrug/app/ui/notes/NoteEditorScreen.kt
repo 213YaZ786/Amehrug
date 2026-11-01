@@ -34,7 +34,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.verticalScroll
+import androidx.compose.foundation.text.input.InputTransformation
+import androidx.compose.foundation.text.input.OutputTransformation
+import androidx.compose.foundation.text.input.TextFieldDecorator
+import androidx.compose.foundation.text.input.TextFieldState
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -69,7 +72,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.Dp
@@ -109,7 +111,8 @@ import kotlinx.coroutines.sync.withLock
  * gesture. Losing a note because the system reclaimed the app is the thing
  * this screen exists to prevent.
  */
-@OptIn(ExperimentalMaterial3Api::class)
+// ExperimentalFoundationApi for TextFieldState.undoState (androidx text/input/TextFieldState.kt).
+@OptIn(ExperimentalMaterial3Api::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun NoteEditorScreen(
     noteId: Long,
@@ -122,13 +125,46 @@ fun NoteEditorScreen(
     var original by remember(noteId) { mutableStateOf(Note(type = newType)) }
 
     var title by remember(noteId) { mutableStateOf("") }
-    // The body carries its selection, because styling applies to whatever is
-    // selected and the field is the only place that knows.
-    var body by remember(noteId) { mutableStateOf(TextFieldValue("")) }
+    // The body state carries its selection, because styling applies to whatever is
+    // selected and the field is the only place that knows. State-based text field:
+    // https://developer.android.com/develop/ui/compose/text/migrate-state-based
+    // (androidx compose foundation text/input/TextFieldState.kt)
+    val bodyState = remember(noteId) { TextFieldState() }
     var spans by remember(noteId) { mutableStateOf(emptyList<TextSpan>()) }
     // A style asked for with nothing selected, waiting for the next
     // characters. -1 means nothing is waiting.
     var pending by remember(noteId) { mutableStateOf(-1) }
+
+    // Spans follow the text in the same edit, as the field commits it.
+    // Port of androidx text/input/InputTransformation.kt (originalText against
+    // asCharSequence() in TextFieldBuffer), replacing the old onValueChange that
+    // compared the previous and the next TextFieldValue.
+    // https://android.googlesource.com/platform/frameworks/support/+/refs/heads/androidx-main/compose/foundation/foundation/src/commonMain/kotlin/androidx/compose/foundation/text/input/InputTransformation.kt
+    // Edits made in code (loading the note) do not pass through it.
+    val spansFollowText = remember(noteId) {
+        InputTransformation {
+            val before = originalText
+            val after = asCharSequence()
+            if (!before.contentEquals(after)) {
+                spans = TextSpans.afterEdit(spans, before.toString(), after.toString(), pending)
+                pending = -1
+            }
+        }
+    }
+
+    // Moving the cursor drops a style that was asked for and never used: a
+    // selection change with the text unchanged, the old onValueChange's second
+    // branch. snapshotFlow on the state's text and selection
+    // (https://developer.android.com/develop/ui/compose/state#snapshotflow).
+    LaunchedEffect(bodyState) {
+        var lastText: CharSequence = bodyState.text
+        var lastSelection = bodyState.selection
+        snapshotFlow { bodyState.text to bodyState.selection }.collect { (text, selection) ->
+            if (selection != lastSelection && text.contentEquals(lastText)) pending = -1
+            lastText = text
+            lastSelection = selection
+        }
+    }
     // The creation date is the note's own, editable in place. While the
     // field has the focus it holds whatever is being typed, which is often
     // not a date yet, so the moment itself only moves when the text parses.
@@ -163,7 +199,15 @@ fun NoteEditorScreen(
             if (note != null) {
                 original = note
                 title = note.title
-                body = TextFieldValue(note.body)
+                // The text goes in with the cursor at 0, as TextFieldValue(note.body) did.
+                // TextFieldState.edit is a code edit: it bypasses the InputTransformation,
+                // so the load is not a user edit. Undo history cleared so undo cannot
+                // return to the empty field (androidx text/input/TextFieldState.kt, UndoState).
+                bodyState.edit {
+                    replace(0, length, note.body)
+                    placeCursorBeforeCharAt(0)
+                }
+                bodyState.undoState.clearHistory()
                 spans = note.spans
                 color = note.color
                 createdAt = note.createdAt
@@ -188,7 +232,7 @@ fun NoteEditorScreen(
             folder = original.folder,
             color = color,
             title = title,
-            body = body.text,
+            body = bodyState.text.toString(),
             spans = spans,
             items = items.toList(),
             labels = original.labels,
@@ -376,32 +420,18 @@ fun NoteEditorScreen(
                         color = background,
                         modifier = Modifier.fillMaxSize(),
                     ) {
-                        BoxWithConstraints(modifier = Modifier.fillMaxSize()) {
-                            val room = maxHeight - 24.dp
-                            StyledEditorField(
-                                value = body,
-                                spans = spans,
-                                onValueChange = { next ->
-                                    if (next.text != body.text) {
-                                        spans = TextSpans.afterEdit(spans, body.text, next.text, pending)
-                                        pending = -1
-                                    } else if (next.selection != body.selection) {
-                                        // Moving the cursor drops a style that was
-                                        // asked for and never used.
-                                        pending = -1
-                                    }
-                                    body = next
-                                },
-                                placeholder = stringResource(R.string.editor_body),
-                                style = MaterialTheme.typography.bodyLarge,
-                                modifier = Modifier
-                                    .fillMaxSize()
-                                    .verticalScroll(rememberScrollState())
-                                    // The whole width: the styles left for the dock's Aa.
-                                    .padding(horizontal = 16.dp, vertical = 12.dp),
-                                minHeight = if (room > 0.dp) room else 0.dp,
-                            )
-                        }
+                        // The field fills the zone and scrolls inside itself, keeping
+                        // the cursor in view (androidx text/input/internal/
+                        // TextFieldCoreModifier.kt, updateScrollState): no outer scroll.
+                        StyledEditorField(
+                            state = bodyState,
+                            spans = { spans },
+                            inputTransformation = spansFollowText,
+                            placeholder = stringResource(R.string.editor_body),
+                            style = MaterialTheme.typography.bodyLarge,
+                            // The whole width: the styles left for the dock's Aa.
+                            modifier = Modifier.fillMaxSize(),
+                        )
                     }
                     NoteType.LIST -> EditorZone(
                         color = background,
@@ -425,19 +455,19 @@ fun NoteEditorScreen(
                     // the bar. Handing the bar a function that reads
                     // state means the bar's own parameters never change,
                     // so Compose skips it and the buttons never light up.
-                    val selection = body.selection
+                    val selection = bodyState.selection
                     val activeStyles = if (selection.collapsed) {
                         if (pending >= 0) {
                             pending
                         } else {
-                            TextSpans.maskBefore(spans, body.text.length, selection.start)
+                            TextSpans.maskBefore(spans, bodyState.text.length, selection.start)
                         }
                     } else {
                         var mask = 0
                         for (kind in STYLE_BUTTONS) {
                             val covered = TextSpans.covers(
                                 spans,
-                                body.text.length,
+                                bodyState.text.length,
                                 selection.start,
                                 selection.end,
                                 kind,
@@ -449,18 +479,18 @@ fun NoteEditorScreen(
                     StyleBar(
                         active = activeStyles,
                         onToggle = { kind ->
-                            val at = body.selection
+                            val at = bodyState.selection
                             if (at.collapsed) {
                                 val base = if (pending >= 0) {
                                     pending
                                 } else {
-                                    TextSpans.maskBefore(spans, body.text.length, at.start)
+                                    TextSpans.maskBefore(spans, bodyState.text.length, at.start)
                                 }
                                 pending = base xor kind.bit
                             } else {
                                 spans = TextSpans.toggle(
                                     spans,
-                                    body.text.length,
+                                    bodyState.text.length,
                                     at.start,
                                     at.end,
                                     kind,
@@ -731,39 +761,72 @@ private fun styleLetter(kind: NoteStyle): String = when (kind) {
 /**
  * The body field. Same as [EditorField] but carrying a selection and the
  * styles, which the plain one does not need.
+ *
+ * State-based BasicTextField (androidx compose foundation text/BasicTextField.kt,
+ * https://developer.android.com/develop/ui/compose/text/migrate-state-based): it
+ * scrolls inside itself and keeps the cursor in view when it moves and when the
+ * field is resized, the keyboard opening (text/input/internal/TextFieldCoreModifier.kt,
+ * updateScrollState). The legacy field brought the stale cursor into view on focus,
+ * which scrolled an outer verticalScroll to the top before the tap placed the cursor
+ * (text/CoreTextField.kt, focus handler). [spans] is read when the text is drawn, not
+ * handed down as a value, so the styles follow the text in the same frame.
  */
 @Composable
 private fun StyledEditorField(
-    value: TextFieldValue,
-    spans: List<TextSpan>,
-    onValueChange: (TextFieldValue) -> Unit,
+    state: TextFieldState,
+    spans: () -> List<TextSpan>,
+    inputTransformation: InputTransformation,
     placeholder: String,
     style: androidx.compose.ui.text.TextStyle,
     modifier: Modifier = Modifier,
-    minHeight: Dp = 0.dp,
 ) {
-    val linkColor = MaterialTheme.colorScheme.primary
-    Box(modifier = modifier.fillMaxWidth()) {
-        if (value.text.isEmpty()) {
-            Text(
-                text = placeholder,
-                style = style,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    val linkColor by rememberUpdatedState(MaterialTheme.colorScheme.primary)
+    val spansNow by rememberUpdatedState(spans)
+    // One object for the field's life: BasicTextField rebuilds its transformed state when the
+    // OutputTransformation changes. It reads the snapshot state above and the spans, so it
+    // reruns by itself when they change.
+    // Port of androidx text/input/OutputTransformation.kt (TextFieldBuffer.addStyle) and
+    // the BasicTextFieldAnnotatedOutputTransformationSample:
+    // https://android.googlesource.com/platform/frameworks/support/+/refs/heads/androidx-main/compose/foundation/foundation/src/commonMain/kotlin/androidx/compose/foundation/text/input/OutputTransformation.kt
+    // Replaces SpanTransformation (a VisualTransformation of the legacy field); the ranges
+    // come from StyledText.kt's annotate and are clamped to the buffer.
+    val outputTransformation = remember {
+        OutputTransformation {
+            val drawn = annotate(asCharSequence().toString(), spansNow(), linkColor)
+            for (run in drawn.spanStyles) {
+                val start = run.start.coerceIn(0, length)
+                val end = run.end.coerceIn(0, length)
+                if (start < end) addStyle(run.item, start, end)
+            }
         }
-        BasicTextField(
-            value = value,
-            onValueChange = onValueChange,
-            textStyle = style.copy(color = MaterialTheme.colorScheme.onSurface),
-            cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-            visualTransformation = remember(spans, linkColor) {
-                SpanTransformation(spans, linkColor)
-            },
-            // Tall enough to cover its zone even when the note is empty,
-            // so writing starts wherever the finger lands.
-            modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = minHeight),
-        )
     }
+    BasicTextField(
+        state = state,
+        modifier = modifier,
+        inputTransformation = inputTransformation,
+        textStyle = style.copy(color = MaterialTheme.colorScheme.onSurface),
+        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
+        outputTransformation = outputTransformation,
+        // The decorator takes the padding and the placeholder (BasicTextField decorator,
+        // https://developer.android.com/develop/ui/compose/text/user-input). Min constraints
+        // pass down so the inner field fills the zone, even for an empty note: writing
+        // starts wherever the finger lands.
+        decorator = TextFieldDecorator { innerTextField ->
+            Box(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp, vertical = 12.dp),
+                propagateMinConstraints = true,
+            ) {
+                if (state.text.isEmpty()) {
+                    Text(
+                        text = placeholder,
+                        style = style,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                innerTextField()
+            }
+        },
+    )
 }
 
 @Composable
