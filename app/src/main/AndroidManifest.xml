@@ -38,9 +38,17 @@
         android:usesCleartextTraffic="false"
         tools:targetApi="37">
 
+        <!--
+          adjustResize: the screens take the keyboard as an inset (safeDrawing) and the
+          window is never panned on top of it, which left a keyboard high gap under the
+          editor when the title took focus. Compose's insets guide
+          (https://developer.android.com/develop/ui/compose/system/insets, IME insets)
+          and SMS's and Dialer's manifests.
+        -->
         <activity
             android:name=".MainActivity"
-            android:exported="true">
+            android:exported="true"
+            android:windowSoftInputMode="adjustResize">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
                 <category android:name="android.intent.category.LAUNCHER" />

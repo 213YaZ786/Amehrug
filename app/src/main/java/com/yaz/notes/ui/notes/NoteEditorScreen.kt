@@ -46,6 +46,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.foundation.interaction.MutableInteractionSource
+import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
@@ -843,19 +845,27 @@ private fun EditorField(
     // and the decoration box keeps the text and its placeholder in the middle
     // of that height (BasicTextField decorationBox,
     // https://developer.android.com/develop/ui/compose/text/user-input).
+    //
+    // The placeholder leaves the field once it is focused, so the cursor never sits over it: Material 3's
+    // rule, the in-field label is shown only while the field is empty and not focused (TextFieldImpl.kt:
+    // interactionSource.collectIsFocusedAsState()),
+    // https://android.googlesource.com/platform/frameworks/support/+/refs/heads/androidx-main/compose/material3/material3/src/commonMain/kotlin/androidx/compose/material3/internal/TextFieldImpl.kt
+    val interactionSource = remember { MutableInteractionSource() }
+    val focused by interactionSource.collectIsFocusedAsState()
     BasicTextField(
         value = value,
         onValueChange = onValueChange,
         textStyle = style.copy(color = MaterialTheme.colorScheme.onSurface),
         cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
         modifier = modifier.fillMaxWidth(),
+        interactionSource = interactionSource,
         decorationBox = { inner ->
             Box(
                 modifier = Modifier.fillMaxWidth().defaultMinSize(minHeight = minHeight),
                 // The inner field is as wide as its text: a centred style is centred by the box.
                 contentAlignment = if (style.textAlign == TextAlign.Center) Alignment.Center else Alignment.CenterStart,
             ) {
-                if (value.isEmpty()) {
+                if (value.isEmpty() && !focused) {
                     Text(
                         text = placeholder,
                         style = style,

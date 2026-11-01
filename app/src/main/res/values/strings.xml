@@ -166,4 +166,20 @@
     <string name="export_failed">That export could not be written.</string>
     <string name="settings_glass">Glass effects</string>
     <string name="settings_troubleshooting">Troubleshooting</string>
+    <string name="settings_glass_summary">Buttons and panes in liquid glass.</string>
+    <string name="settings_lock_name">App lock</string>
+    <string name="settings_timestamp_name">Note date</string>
+    <string name="settings_timeout_name">Lock delay</string>
+    <string name="settings_lock_now_value">At once</string>
+    <string name="settings_lock_now_summary">Locks the app now.</string>
+    <string name="backup_export_name">Save backup</string>
+    <string name="backup_export_value">Encrypted file</string>
+    <string name="backup_restore_name">Restore</string>
+    <string name="backup_restore_value">From a backup</string>
+    <string name="notally_import_name">Notally</string>
+    <string name="notally_import_value">Import</string>
+    <string name="backup_working_short">Working</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_diagnostics_value">Error log</string>
+    <string name="settings_diagnostics_summary">The log of errors, with no note content. Copy or save it to report a problem.</string>
 </resources>

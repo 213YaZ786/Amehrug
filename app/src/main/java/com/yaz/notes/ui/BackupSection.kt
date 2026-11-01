@@ -8,7 +8,6 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
@@ -20,8 +19,11 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.res.vectorResource
+import com.yaz.notes.ui.component.SettingsActionTile
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
@@ -46,9 +48,16 @@ private sealed interface Ask {
  * is not stored anywhere: a backup nobody can open is the point.
  *
  * Scheduled backups are the next task.
+ *
+ * Returns the actions as tiles for Settings and emits the password dialogs, so it is called once, at the
+ * top of the screen, where its state outlives a section being folded. Taken from SMS's Settings, which keeps
+ * its dialogs outside the tiles' grid (`when (dialog)`) and lists its tiles as SettingsActionTile:
+ * /home/yghouar/Claude Code/APK/YAZ/SMS/app/src/main/java/com/yaz/sms/feature/settings/SettingsScreen.kt
+ * (repo 213YaZ786/SMS, app/src/main/java/com/yaz/sms/feature/settings/SettingsScreen.kt,
+ * https://github.com/213YaZ786/SMS/blob/main/app/src/main/java/com/yaz/sms/feature/settings/SettingsScreen.kt).
  */
 @Composable
-fun BackupSection(rowContent: @Composable (String, String?, Boolean, () -> Unit) -> Unit) {
+fun rememberBackupTiles(): List<SettingsActionTile> {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var working by remember { mutableStateOf(false) }
@@ -97,39 +106,45 @@ fun BackupSection(rowContent: @Composable (String, String?, Boolean, () -> Unit)
         }
     }
 
-    rowContent(
-        stringResource(R.string.backup_export),
-        stringResource(R.string.backup_export_summary),
-        !working,
-    ) {
-        val stamp = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
-        exportPicker.launch("notes-$stamp.amb")
-    }
-    rowContent(
-        stringResource(R.string.backup_restore),
-        stringResource(R.string.backup_restore_summary),
-        !working,
-    ) {
-        restorePicker.launch(arrayOf("*/*"))
-    }
-    rowContent(
-        stringResource(R.string.notally_import),
-        stringResource(R.string.notally_import_summary),
-        !working,
-    ) {
-        notallyPicker.launch(arrayOf("*/*"))
-    }
-    if (working) {
-        Column(modifier = Modifier.padding(16.dp)) {
-            CircularProgressIndicator()
-            Text(
-                text = stringResource(R.string.backup_working),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(top = 8.dp),
-            )
-        }
-    }
+    // The three actions as tiles of Settings (Modules' SettingsTiles, SMS's Settings): a tap starts the
+    // action, a long press shows the full text. While one runs, the tiles say so and a tap does nothing;
+    // the long press then reads the slow password note instead of the usual summary.
+    val busy = stringResource(R.string.backup_working_short)
+    val busySummary = stringResource(R.string.backup_working)
+    val tiles = listOf(
+        SettingsActionTile(
+            id = "export",
+            name = stringResource(R.string.backup_export_name),
+            title = stringResource(R.string.backup_export),
+            icon = ImageVector.vectorResource(R.drawable.ic_export),
+            value = if (working) busy else stringResource(R.string.backup_export_value),
+            summary = if (working) busySummary else stringResource(R.string.backup_export_summary),
+            onClick = {
+                if (!working) {
+                    val stamp = LocalDate.now().format(DateTimeFormatter.ofPattern("yyyyMMdd"))
+                    exportPicker.launch("notes-$stamp.amb")
+                }
+            },
+        ),
+        SettingsActionTile(
+            id = "restore",
+            name = stringResource(R.string.backup_restore_name),
+            title = stringResource(R.string.backup_restore),
+            icon = ImageVector.vectorResource(R.drawable.ic_restore),
+            value = if (working) busy else stringResource(R.string.backup_restore_value),
+            summary = if (working) busySummary else stringResource(R.string.backup_restore_summary),
+            onClick = { if (!working) restorePicker.launch(arrayOf("*/*")) },
+        ),
+        SettingsActionTile(
+            id = "notally",
+            name = stringResource(R.string.notally_import_name),
+            title = stringResource(R.string.notally_import),
+            icon = ImageVector.vectorResource(R.drawable.ic_note),
+            value = if (working) busy else stringResource(R.string.notally_import_value),
+            summary = if (working) busySummary else stringResource(R.string.notally_import_summary),
+            onClick = { if (!working) notallyPicker.launch(arrayOf("*/*")) },
+        ),
+    )
 
     when (val current = ask) {
         null -> Unit
@@ -189,6 +204,7 @@ fun BackupSection(rowContent: @Composable (String, String?, Boolean, () -> Unit)
             }
         }
     }
+    return tiles
 }
 
 @Composable

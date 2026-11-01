@@ -127,4 +127,20 @@
     <string name="attachment_failed">Cette image n\'a pas pu être ajoutée.</string>
     <string name="settings_glass">Effets verre</string>
     <string name="settings_troubleshooting">Dépannage</string>
+    <string name="settings_glass_summary">Boutons et panneaux en verre liquide.</string>
+    <string name="settings_lock_name">Verrouillage</string>
+    <string name="settings_timestamp_name">Date des notes</string>
+    <string name="settings_timeout_name">Délai</string>
+    <string name="settings_lock_now_value">Tout de suite</string>
+    <string name="settings_lock_now_summary">Verrouille l\'application maintenant.</string>
+    <string name="backup_export_name">Sauvegarder</string>
+    <string name="backup_export_value">Fichier chiffré</string>
+    <string name="backup_restore_name">Restaurer</string>
+    <string name="backup_restore_value">Depuis une sauvegarde</string>
+    <string name="notally_import_name">Notally</string>
+    <string name="notally_import_value">Importer</string>
+    <string name="backup_working_short">En cours</string>
+    <string name="settings_version">Version</string>
+    <string name="settings_diagnostics_value">Journal d\'erreurs</string>
+    <string name="settings_diagnostics_summary">Le journal des erreurs, sans le contenu des notes. Copiez-le ou enregistrez-le pour signaler un problème.</string>
 </resources>

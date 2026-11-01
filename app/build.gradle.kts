@@ -14,8 +14,8 @@ android {
         applicationId = "com.yaz.notes"
         minSdk = 31
         targetSdk = 37
-        versionCode = 57
-        versionName = "0.25.0"
+        versionCode = 58
+        versionName = "0.25.1"
     }
 
     // Signing comes from the environment, so no key and no password is ever
