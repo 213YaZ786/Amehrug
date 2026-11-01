@@ -3,7 +3,7 @@
   allowBackup="false" is not enough on Android 12 and later: on some devices
   it leaves device to device transfer on. Every domain listed on
   developer.android.com (behavior changes, Android 12) is excluded from both
-  channels. Amehrug stores nothing in device protected storage, so the
+  channels. Notes stores nothing in device protected storage, so the
   device_* domains are not needed. Moving to a new phone goes through an
   encrypted export, roadmap task 8.
 -->

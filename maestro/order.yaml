@@ -1,7 +1,7 @@
 # The list is a grid on a tablet, newest first from the left.
 # A note opened and left unchanged keeps its place in the list (NotallyX's checkSave rule).
 # Commands from https://docs.maestro.dev/reference/commands-available.
-appId: com.amehrug.app.debug
+appId: com.yaz.notes.debug
 ---
 - launchApp
 - tapOn: "New note"

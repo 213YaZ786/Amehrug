@@ -1,9 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="app_name" translatable="false">Amehrug</string>
+    <string name="app_name" translatable="false">Notes</string>
     <string name="tagline">Private notes. Offline. Yours.</string>
     <string name="opening">Opening</string>
-    <string name="open_failed">Amehrug cannot open its data on this device.</string>
+    <string name="open_failed">Notes cannot open its data on this device.</string>
 
     <string name="action_back">Back</string>
     <string name="action_refresh">Refresh</string>
@@ -32,7 +32,7 @@
 
     <string name="lock_locked">Locked</string>
     <string name="lock_unlock">Unlock</string>
-    <string name="lock_prompt_title">Unlock Amehrug</string>
+    <string name="lock_prompt_title">Unlock Notes</string>
     <string name="lock_unavailable">Unlock is unavailable right now.</string>
     <string name="lock_prompt_description">Your notes stay hidden until you unlock.</string>
 

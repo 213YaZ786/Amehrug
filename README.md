@@ -1,4 +1,6 @@
-# Amehrug
+# Notes
+
+Formerly Amehrug: make a backup in Amehrug, restore it in Notes.
 
 Private notes for Android.
 
@@ -36,7 +38,7 @@ almost any recent phone, or `universal` if you are not sure.
 Every release carries a `SHA256SUMS.txt`. To check what you downloaded:
 
 ```
-sha256sum Amehrug-<version>-<abi>.apk
+sha256sum Notes-<version>-<abi>.apk
 ```
 
 Compare the result with the matching line in that file.
@@ -56,7 +58,7 @@ publishes a signed APK per architecture.
 
 ## Credits
 
-Amehrug is a fork of [Notally](https://github.com/OmGodse/Notally) by OMGodse,
+Notes is a fork of [Notally](https://github.com/OmGodse/Notally) by OMGodse,
 released under the GNU General Public License v3.
 
 Icons are Material Symbols Rounded from

@@ -1,0 +1,345 @@
+package com.yaz.notes
+
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.DrawerDefaults
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.ui.graphics.Color
+import com.yaz.notes.ui.glass.LocalGlass
+import com.yaz.notes.ui.glass.glassGround
+import com.yaz.notes.ui.glass.glassZone
+import com.yaz.notes.ui.glass.rememberGlassLook
+import android.os.Bundle
+import android.os.Process
+import android.os.SystemClock
+import android.view.WindowManager
+import androidx.activity.ComponentActivity
+import androidx.activity.compose.BackHandler
+import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.ModalDrawerSheet
+import androidx.compose.material3.ModalNavigationDrawer
+import androidx.compose.material3.NavigationDrawerItem
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Text
+import androidx.compose.material3.rememberDrawerState
+import androidx.compose.material3.DrawerValue
+import androidx.compose.material3.Icon
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.unit.dp
+import com.yaz.notes.diagnostics.Diagnostics
+import com.yaz.notes.diagnostics.DiagnosticsScreen
+import com.yaz.notes.model.AppSettings
+import com.yaz.notes.model.Folder
+import com.yaz.notes.model.NoteType
+import com.yaz.notes.ui.LockScreen
+import com.yaz.notes.ui.SettingsScreen
+import com.yaz.notes.ui.notes.NoteEditorScreen
+import com.yaz.notes.ui.notes.NotesListScreen
+import com.yaz.notes.ui.theme.NotesTheme
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.launch
+
+class MainActivity : ComponentActivity() {
+
+    override fun onCreate(savedInstanceState: Bundle?) {
+        enableEdgeToEdge()
+        super.onCreate(savedInstanceState)
+        // Hides notes from screenshots, screen recording and the recents
+        // preview. Always on for now. Roadmap task 19 turns it into a
+        // setting that stays on by default.
+        // The debug build only lets screens be captured, so they can be checked on the
+        // emulator (screencap and screen tests); the release always hides them.
+        val debuggable = applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE != 0
+        if (!debuggable) window.setFlags(
+            WindowManager.LayoutParams.FLAG_SECURE,
+            WindowManager.LayoutParams.FLAG_SECURE,
+        )
+        setContent {
+            NotesTheme {
+                NotesApp()
+            }
+        }
+        if (savedInstanceState == null) {
+            val sinceStart = SystemClock.uptimeMillis() - Process.getStartUptimeMillis()
+            Diagnostics.log.info("start", "process to activity $sinceStart ms")
+        }
+    }
+
+    override fun onStart() {
+        super.onStart()
+        AppGraph.lock.onForeground()
+    }
+
+    override fun onStop() {
+        super.onStop()
+        // Before anything else: whatever is being typed reaches the disk.
+        AppGraph.flushPendingWrite()
+        val leftAt = AppGraph.lock.onBackground()
+        if (leftAt != null) {
+            // appScope, because the activity may be gone before this lands.
+            AppGraph.appScope.launch {
+                try {
+                    AppGraph.settings.setLockLeftAt(leftAt)
+                } catch (e: Exception) {
+                    Diagnostics.log.error("lock", "writing the departure time", e)
+                }
+            }
+        }
+    }
+}
+
+private sealed interface SettingsState {
+    data object Loading : SettingsState
+
+    data object Failed : SettingsState
+
+    data class Ready(val settings: AppSettings) : SettingsState
+}
+
+// Renamed from AmehrugApp, same code; naming as in https://github.com/213YaZ786/SMS (MainActivity.kt).
+@Composable
+private fun NotesApp() {
+    // Opening the database happens here, off the main thread.
+    val state by produceState<SettingsState>(SettingsState.Loading) {
+        try {
+            // Read once, then wiped: a window granted by a departure time
+            // is spent the moment it is used, so a process killed while in
+            // front cannot leave an old one lying around to be reused.
+            val restored = AppGraph.settings.lockLeftAt()
+            AppGraph.lock.restore(restored)
+            if (restored != null) AppGraph.settings.setLockLeftAt(null)
+            AppGraph.settings.settings.collect { settings ->
+                AppGraph.lock.onSettings(settings)
+                value = SettingsState.Ready(settings)
+            }
+        } catch (cancel: CancellationException) {
+            // Leaving the screen cancels the coroutine, and
+            // CancellationException is an Exception. Caught below it would
+            // be reported as a failure and would break the cancellation.
+            throw cancel
+        } catch (e: Exception) {
+            Diagnostics.log.error("settings", "reading settings", e)
+            value = SettingsState.Failed
+        }
+    }
+    val locked by AppGraph.lock.locked.collectAsState()
+
+    // Glass over Material You: the look for this theme, or none when the
+    // user turned it off, and the page's ground with its ambient light under
+    // every screen. Until the settings are read, glass is on, its default.
+    // Quiet glass, as SMS's AppSurface (213YaZ786/SMS, ui/theme/AppSurface.kt).
+    val glassOn = (state as? SettingsState.Ready)?.settings?.glass ?: true
+    val look = rememberGlassLook(MaterialTheme.colorScheme, glassOn, quiet = true)
+    CompositionLocalProvider(LocalGlass provides look) {
+    Box(Modifier.fillMaxSize().glassGround(look, MaterialTheme.colorScheme.background)) {
+    when (val current = state) {
+        SettingsState.Loading -> MessageScreen(stringResource(R.string.opening))
+        // Nothing is shown when the settings cannot be read: the lock state
+        // is unknown, so the notes stay hidden.
+        SettingsState.Failed -> MessageScreen(stringResource(R.string.open_failed))
+        is SettingsState.Ready ->
+            if (locked) {
+                LockScreen(
+                    method = current.settings.lockMethod,
+                    onUnlocked = { AppGraph.lock.unlock() },
+                )
+            } else {
+                NotesRoot(current.settings)
+            }
+    }
+    }
+    }
+}
+
+private sealed interface Screen {
+    data object Notes : Screen
+
+    data class Editor(val noteId: Long, val type: NoteType) : Screen
+
+    data object Settings : Screen
+
+    data object Diagnostics : Screen
+}
+
+// Renamed from AmehrugRoot, same code; naming as in https://github.com/213YaZ786/SMS (MainActivity.kt).
+@Composable
+private fun NotesRoot(settings: AppSettings) {
+    // Saved as plain strings and numbers, which survive a rotation without a
+    // custom saver.
+    var screenName by rememberSaveable { mutableStateOf(NOTES) }
+    var editorId by rememberSaveable { mutableStateOf(0L) }
+    var editorType by rememberSaveable { mutableStateOf(NoteType.NOTE.name) }
+    var folderName by rememberSaveable { mutableStateOf(Folder.NOTES.name) }
+    var labelFilter by rememberSaveable { mutableStateOf("") }
+    var query by rememberSaveable { mutableStateOf("") }
+    var columns by rememberSaveable { mutableStateOf(2) }
+
+    val folder = Folder.entries.firstOrNull { it.name == folderName } ?: Folder.NOTES
+    val screen: Screen = when (screenName) {
+        SETTINGS -> Screen.Settings
+        DIAGNOSTICS -> Screen.Diagnostics
+        EDITOR -> Screen.Editor(
+            noteId = editorId,
+            type = NoteType.entries.firstOrNull { it.name == editorType } ?: NoteType.NOTE,
+        )
+        else -> Screen.Notes
+    }
+
+    val labels by produceState(initialValue = emptyList<String>()) {
+        AppGraph.notes.observeLabels().collect { value = it }
+    }
+
+    // The editor handles its own back, because it has to write the note
+    // first. The diagnostic log goes back to the settings it lives in,
+    // everything else just goes home.
+    BackHandler(enabled = screenName != NOTES && screenName != EDITOR) {
+        screenName = if (screenName == DIAGNOSTICS) SETTINGS else NOTES
+    }
+
+    // One number the diagnostic log can be read for, when a bar looks like
+    // it is sitting under the status bar. Zero here means the window is not
+    // handing insets to Compose at all, which is a different bug from a
+    // component that forgets to apply them.
+    val density = LocalDensity.current
+    val safeTop = WindowInsets.safeDrawing.getTop(density)
+    LaunchedEffect(safeTop) {
+        Diagnostics.log.info("insets", "safe drawing top $safeTop px")
+    }
+
+    val body: @Composable () -> Unit = {
+        // One spring for every screen change, so opening a note and coming
+        // back feel like the same movement played forwards and backwards.
+        AnimatedContent(
+            targetState = screen,
+            transitionSpec = {
+                val enter = scaleIn(
+                    animationSpec = spring(dampingRatio = 0.9f, stiffness = 380f),
+                    initialScale = 0.92f,
+                ) + fadeIn(spring(stiffness = 420f))
+                val exit = scaleOut(
+                    animationSpec = spring(dampingRatio = 0.9f, stiffness = 380f),
+                    targetScale = 0.96f,
+                ) + fadeOut(spring(stiffness = 420f))
+                enter togetherWith exit
+            },
+            label = "screen",
+        ) { current ->
+            when (current) {
+                Screen.Notes -> NotesListScreen(
+                    folder = folder,
+                    label = labelFilter.ifEmpty { null },
+                    query = query,
+                    onQueryChange = { query = it },
+                    columns = columns,
+                    onColumnsChange = { columns = it },
+                    labels = labels,
+                    onFolder = { f -> folderName = f.name; labelFilter = ""; screenName = NOTES },
+                    onLabel = { l -> labelFilter = l; folderName = Folder.NOTES.name; screenName = NOTES },
+                    dockOrder = settings.dockOrder,
+                    timestamp = settings.noteTimestamp,
+                    onDockReorder = { order ->
+                        AppGraph.appScope.launch { AppGraph.settings.setDockOrder(order) }
+                    },
+                    onHome = {
+                        folderName = Folder.NOTES.name
+                        labelFilter = ""
+                        query = ""
+                        screenName = NOTES
+                    },
+                    onSettings = { screenName = SETTINGS },
+                    onOpen = { id ->
+                        editorId = id
+                        editorType = NoteType.NOTE.name
+                        screenName = EDITOR
+                    },
+                    onCreate = { type ->
+                        editorId = 0L
+                        editorType = type.name
+                        screenName = EDITOR
+                    },
+                )
+                is Screen.Editor -> NoteEditorScreen(
+                    noteId = current.noteId,
+                    newType = current.type,
+                    timestamp = settings.noteTimestamp,
+                    onClose = { screenName = NOTES },
+                )
+                Screen.Settings -> SettingsScreen(
+                    settings = settings,
+                    onBack = { screenName = NOTES },
+                    onDiagnostics = { screenName = DIAGNOSTICS },
+                )
+                Screen.Diagnostics -> DiagnosticsScreen(onBack = { screenName = SETTINGS })
+            }
+        }
+    }
+
+    // No rail and no drawer, on a phone as on a tablet (the user, 2026-10-17): the
+    // places of the notes sit as round panes beside the search pill, and Notes
+    // and Settings in the dock, so the content takes the whole window.
+    body()
+}
+
+private const val NOTES = "notes"
+private const val EDITOR = "editor"
+private const val SETTINGS = "settings"
+private const val DIAGNOSTICS = "diagnostics"
+
+@Composable
+private fun MessageScreen(message: String) {
+    Scaffold(modifier = Modifier.fillMaxSize(), containerColor = Color.Transparent) { insets ->
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(insets)
+                .padding(24.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            CircularProgressIndicator()
+            Text(
+                text = message,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(top = 16.dp),
+            )
+        }
+    }
+}

@@ -2,7 +2,7 @@
 <resources>
     <string name="tagline">Notes privées. Hors ligne. À vous.</string>
     <string name="opening">Ouverture</string>
-    <string name="open_failed">Amehrug ne peut pas ouvrir ses données sur cet appareil.</string>
+    <string name="open_failed">Notes ne peut pas ouvrir ses données sur cet appareil.</string>
 
     <string name="action_back">Retour</string>
     <string name="action_refresh">Actualiser</string>
@@ -29,7 +29,7 @@
 
     <string name="lock_locked">Verrouillé</string>
     <string name="lock_unlock">Déverrouiller</string>
-    <string name="lock_prompt_title">Déverrouiller Amehrug</string>
+    <string name="lock_prompt_title">Déverrouiller Notes</string>
     <string name="lock_unavailable">Le déverrouillage est indisponible pour le moment.</string>
     <string name="lock_prompt_description">Vos notes restent cachées jusqu\'au déverrouillage.</string>
 

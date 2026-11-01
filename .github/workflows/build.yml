@@ -106,7 +106,7 @@ jobs:
             base="$(basename "$file" .apk)"
             abi="${base#app-}"
             abi="${abi%-release}"
-            cp "$file" "release/Amehrug-$VERSION-$abi.apk"
+            cp "$file" "release/Notes-$VERSION-$abi.apk"
           done
           ( cd release && sha256sum ./*.apk > SHA256SUMS.txt )
           cat release/SHA256SUMS.txt
@@ -117,9 +117,9 @@ jobs:
       - name: Check release permissions
         run: |
           AAPT2="$(ls -d "$ANDROID_HOME"/build-tools/*/ | sort -V | tail -n 1)aapt2"
-          "$AAPT2" dump permissions "release/Amehrug-$VERSION-universal.apk" | tee permissions.txt
+          "$AAPT2" dump permissions "release/Notes-$VERSION-universal.apk" | tee permissions.txt
           if grep -E "uses-permission" permissions.txt \
-            | grep -v "com.amehrug.app.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" \
+            | grep -v "com.yaz.notes.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION" \
             | grep -v "android.permission.USE_BIOMETRIC"
           then
             echo "Unexpected permission in the release APK"
@@ -129,14 +129,14 @@ jobs:
       - name: Upload the debug APKs
         uses: actions/upload-artifact@v7
         with:
-          name: amehrug-debug
+          name: notes-debug
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
 
       - name: Upload the release APKs
         uses: actions/upload-artifact@v7
         with:
-          name: amehrug-release
+          name: notes-release
           path: release/*
           if-no-files-found: error
 
@@ -149,11 +149,11 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           TAG="v$VERSION"
-          TITLE="Amehrug $VERSION"
+          TITLE="Notes $VERSION"
           if gh release view "$TAG" > /dev/null 2>&1
           then
             TAG="v$VERSION-b$GITHUB_RUN_NUMBER"
-            TITLE="Amehrug $VERSION (build $GITHUB_RUN_NUMBER)"
+            TITLE="Notes $VERSION (build $GITHUB_RUN_NUMBER)"
           fi
           gh release create "$TAG" release/* \
             --repo "$GITHUB_REPOSITORY" \

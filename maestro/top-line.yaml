@@ -1,6 +1,6 @@
 # The top line of the list: Archive, Trash and Settings as round panes, each touched
 # twice going back to the notes. Commands from https://docs.maestro.dev/reference/commands-available.
-appId: com.amehrug.app.debug
+appId: com.yaz.notes.debug
 ---
 - launchApp
 - extendedWaitUntil:
